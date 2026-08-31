@@ -1,0 +1,21 @@
+{
+  "name": "Dino Officina",
+  "short_name": "Officina",
+  "description": "Monta, prova e aggiusta buffe macchine con pezzi grandi.",
+  "lang": "it",
+  "start_url": "./",
+  "scope": "./",
+  "id": "/dino-officina/",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "landscape",
+  "background_color": "#163c45",
+  "theme_color": "#163c45",
+  "categories": ["games", "kids", "education"],
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
