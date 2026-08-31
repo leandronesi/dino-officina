@@ -11,6 +11,9 @@ Gioco canvas/PWA offline per tablet: si prendono pezzi grandi da un vassoio, si 
 - sagome, agganci lampeggianti e pulsante **Aiuto**;
 - ciclo completo **monto → provo → aggiusto → riprovo**;
 - salvataggio locale di stelle e missioni completate;
+- profili separati per ogni bambino (nome, colore, Piccolo/Grande e segreto facoltativo a tre figure);
+- accesso richiesto a ogni avvio e cambio profilo protetto dall'area genitori;
+- migrazione automatica del precedente salvataggio singolo nel profilo `Dino`;
 - PWA installabile e utilizzabile offline, senza asset esterni o licenziati.
 
 ## Avvio
@@ -29,3 +32,7 @@ node test/smoke.js
 ```
 
 Il test avvia l’intero bundle in un canvas simulato e attraversa tutte le missioni, la modalità libera e un montaggio errato in modalità Grande.
+
+## Sito pubblico
+
+Il workflow `.github/workflows/deploy.yml` pubblica automaticamente ogni push su `main` su `https://leandronesi.github.io/dino-officina/`. La prima volta, in **Settings → Pages**, la sorgente deve essere impostata su **GitHub Actions**.

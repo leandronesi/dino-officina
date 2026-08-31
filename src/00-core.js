@@ -23,11 +23,19 @@
   G.sfx=function(name){try{var C=window.AudioContext||window.webkitAudioContext;if(!C)return;if(!AC)AC=new C();var notes=name==='win'?[523,659,784,1046]:name==='bad'?[240,190]:name==='snap'?[620,900]:[500];notes.forEach(function(f,i){var o=AC.createOscillator(),g=AC.createGain(),t=AC.currentTime+i*.08;o.type='triangle';o.frequency.setValueAtTime(f,t);g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.14,t+.015);g.gain.exponentialRampToValueAtTime(.0001,t+.14);o.connect(g);g.connect(AC.destination);o.start(t);o.stop(t+.16);});}catch(e){}};
   G.say=function(s){try{if(!speechSynthesis||!s)return;speechSynthesis.cancel();var u=new SpeechSynthesisUtterance(s);u.lang='it-IT';u.rate=.92;u.pitch=1.12;speechSynthesis.speak(u);}catch(e){}};
 
-  var save;
-  try{save=JSON.parse(localStorage.getItem('dino-officina.save')||'null');}catch(e){}
-  if(!save||typeof save!=='object')save={level:1,stars:0,done:{},freeBuilds:0,mute:false};
-  G.save=save; G.level=save.level===2?2:1;
-  G.saveNow=function(){save.level=G.level;try{localStorage.setItem('dino-officina.save',JSON.stringify(save));}catch(e){}};
+  var LEGACY_KEY='dino-officina.save', PROFILES_KEY='dino-officina.profiles', legacy, profiles=[];
+  try{legacy=JSON.parse(localStorage.getItem(LEGACY_KEY)||'null');}catch(e){}
+  try{profiles=JSON.parse(localStorage.getItem(PROFILES_KEY)||'[]');}catch(e){}
+  if(!Array.isArray(profiles))profiles=[];
+  if(!profiles.length&&legacy&&typeof legacy==='object'&&!Array.isArray(legacy)){profiles=[{id:'legacy',name:'Dino',color:G.C.green,level:legacy.level===2?2:1,secret:null,created:Date.now()}];try{localStorage.setItem(PROFILES_KEY,JSON.stringify(profiles));localStorage.setItem(LEGACY_KEY+'.legacy',JSON.stringify(legacy));}catch(e){}}
+  function blank(){return{level:1,stars:0,done:{},freeBuilds:0,mute:false};}
+  function clean(s){var b=blank(),k;if(!s||typeof s!=='object'||Array.isArray(s))return b;for(k in b)if(s[k]===undefined||s[k]===null)s[k]=b[k];if(typeof s.done!=='object'||Array.isArray(s.done))s.done={};if(typeof s.stars!=='number'||!isFinite(s.stars)||s.stars<0)s.stars=0;s.stars=Math.floor(s.stars);return s;}
+  function readProfile(id){var p=profiles.filter(function(q){return q.id===id;})[0],s=null;if(p&&p.id==='legacy')s=legacy||null;try{s=s||JSON.parse(localStorage.getItem(LEGACY_KEY+'.'+id)||'null');}catch(e){}return clean(s);}
+  G._profiles=profiles; G._activeId=null; G.account=null; G.save=clean(legacy); G.level=G.save.level===2?2:1;
+  G._profileLogin=function(id){var p=profiles.filter(function(q){return q.id===id;})[0];if(!p)return false;G._activeId=p.id;G.account=p;G.save=readProfile(p.id);G.level=p.level===2?2:1;G.save.level=G.level;try{localStorage.setItem(LEGACY_KEY+'.'+p.id,JSON.stringify(G.save));localStorage.setItem('dino-officina.last',p.id);}catch(e){}return true;};
+  G._profileLogout=function(){G.saveNow();G._activeId=null;G.account=null;G.save=blank();G.level=1;};
+  G.saveNow=function(){G.save.level=G.level;if(G.account)G.account.level=G.level;try{localStorage.setItem(LEGACY_KEY+(G._activeId?'.'+G._activeId:''),JSON.stringify(G.save));if(G._activeId)localStorage.setItem(PROFILES_KEY,JSON.stringify(profiles));}catch(e){}};
+  G._blankSave=blank; G._profilesKey=PROFILES_KEY;
 
   var hot=[],next=[],pressed=null,pointer={x:0,y:0,down:false};G.pointer=pointer;G.ui={};
   function logical(e){var r=cv.getBoundingClientRect();return{x:(e.clientX-r.left-view.ox)/view.s,y:(e.clientY-r.top-view.oy)/view.s};}
