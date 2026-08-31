@@ -44,10 +44,18 @@ async function main() {
   const setup = await call('Runtime.evaluate', { expression: "(function(){G.accounts.create({name:'Leo',color:G.C.green,level:1});G.accounts.create({name:'Teo',color:G.C.blue,level:2});G.go('accesso');return G.current;})()", returnByValue: true });
   if (setup.exceptionDetails) throw new Error('Setup pagina fallito');
   await delay(1700);
-  const shot = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
   const dir = path.join(__dirname, 'frames'); fs.mkdirSync(dir, { recursive: true });
+  const shot = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
   const file = path.join(dir, 'accesso-profili.png'); fs.writeFileSync(file, Buffer.from(shot.data, 'base64'));
-  console.log('✓ fotogramma reale salvato in test/frames/accesso-profili.png');
+  await call('Runtime.evaluate', { expression: "G.go('nuovo')", returnByValue: true });
+  await delay(500);
+  const wizard = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+  fs.writeFileSync(path.join(dir, 'nuovo-profilo.png'), Buffer.from(wizard.data, 'base64'));
+  await call('Runtime.evaluate', { expression: "document.getElementById('profile-next-name').click();document.getElementById('profile-next-color').click();document.getElementById('profile-next-level').click()", returnByValue: true });
+  await delay(250);
+  const secret = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+  fs.writeFileSync(path.join(dir, 'segreto-profilo.png'), Buffer.from(secret.data, 'base64'));
+  console.log('✓ fotogrammi reali salvati in test/frames/');
   ws.close(); child.kill(); server.close();
   await Promise.race([new Promise(resolve => child.once('exit', resolve)), delay(2500)]);
   for (let i = 0; i < 8; i++) {

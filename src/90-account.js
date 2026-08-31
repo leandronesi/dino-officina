@@ -5,13 +5,41 @@
   var C = G.C, W = G.W, H = G.H;
   var list = G._profiles || [], pending = null;
   var draft = { name: 'Dino', color: C.green, level: 1, secret: [] };
-  var secretShapes = ['cuore', 'stella', 'luna'];
+  var secretShapes = ['♥', '★', '☾', '●', '◆', '✿', '☀', '▲', '■'];
   var gate = { hold: 0, unlocked: false };
 
   function persist() { try { localStorage.setItem(G._profilesKey, JSON.stringify(list)); } catch (e) {} }
   function idFor() { return 'p-' + Date.now().toString(36) + '-' + G.rndi(100, 999); }
-  function nameFor() { try { if (typeof prompt === 'function') return String(prompt('Come si chiama il dino?', draft.name) || draft.name).slice(0, 18) || 'Dino'; } catch (e) {} return draft.name; }
+  function nameFor() { return draft.name; }
   function profile(id) { for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i]; return null; }
+
+  var overlay = null, wizardBound = false, wizardStep = 0;
+  function el(id) { try { return document.getElementById(id); } catch (e) { return null; } }
+  function hideWizard() { overlay = overlay || el('profile-overlay'); if (overlay && overlay.classList) { overlay.classList.remove('on'); if (overlay.setAttribute) overlay.setAttribute('aria-hidden', 'true'); } }
+  function showStep(n) {
+    wizardStep = n; var ids = ['name', 'color', 'level', 'secret'], i, node;
+    for (i = 0; i < ids.length; i++) { node = el('profile-step-' + ids[i]); if (node && node.classList) node.classList.toggle('hidden', i !== n); }
+    var title = el('profile-title'), copy = el('profile-copy');
+    if (title) title.textContent = ['Nuovo dino', 'Il suo colore', 'Piccolo o Grande?', 'Un segreto per il dino'][n];
+    if (copy) copy.textContent = ['Creiamo il suo profilo', 'Scegli un colore allegro', 'Potrai cambiarlo dai genitori', 'Tre figure in ordine, oppure salta'][n];
+  }
+  function finishWizard() { var p = G.accounts.create(draft); hideWizard(); G._profileLogin(p.id); G.go('menu'); }
+  function bindWizard() {
+    overlay = el('profile-overlay'); if (!overlay || wizardBound || !overlay.querySelector) return;
+    wizardBound = true;
+    el('profile-cancel').addEventListener('click', function () { hideWizard(); G.go('accesso'); });
+    el('profile-next-name').addEventListener('click', function () { var input = el('profile-name'); draft.name = String((input && input.value) || 'Dino').trim().slice(0, 18) || 'Dino'; showStep(1); });
+    var colors = overlay.querySelectorAll('[data-color]'); colors.forEach(function (b) { b.addEventListener('click', function () { draft.color = b.getAttribute('data-color'); colors.forEach(function (q) { q.classList.remove('selected'); }); b.classList.add('selected'); }); });
+    el('profile-next-color').addEventListener('click', function () { showStep(2); });
+    el('profile-level-small').addEventListener('click', function () { draft.level = 1; el('profile-level-small').classList.add('selected'); el('profile-level-big').classList.remove('selected'); });
+    el('profile-level-big').addEventListener('click', function () { draft.level = 2; el('profile-level-big').classList.add('selected'); el('profile-level-small').classList.remove('selected'); });
+    el('profile-next-level').addEventListener('click', function () { showStep(3); });
+    var shapes = overlay.querySelectorAll('[data-shape]'); shapes.forEach(function (b) { b.addEventListener('click', function () { var v = Number(b.getAttribute('data-shape')), at = draft.secret.indexOf(v); if (at >= 0) draft.secret.splice(at, 1); else if (draft.secret.length < 3) draft.secret.push(v); b.classList.toggle('selected', draft.secret.indexOf(v) >= 0); var status = el('profile-secret-status'); if (status) status.textContent = draft.secret.length + ' / 3'; }); });
+    el('profile-skip-secret').addEventListener('click', function () { draft.secret = []; finishWizard(); });
+    el('profile-create').addEventListener('click', function () { if (draft.secret.length !== 3) { G.say('Scegli tre figure, oppure tocca senza segreto.'); return; } finishWizard(); });
+    showStep(0);
+  }
+  function showWizard() { bindWizard(); if (!overlay) return; if (overlay.classList) overlay.classList.add('on'); if (overlay.setAttribute) overlay.setAttribute('aria-hidden', 'false'); var input = el('profile-name'); if (input) input.value = draft.name; showStep(0); }
 
   G.accounts = {
     list: function () { return list.slice(); },
@@ -31,7 +59,7 @@
   function icon(c, x, y, type, col) { c.save(); c.fillStyle = col || C.orange; c.strokeStyle = C.ink; c.lineWidth = 5; if (type === 'heart') { c.beginPath(); c.moveTo(x, y + 20); c.bezierCurveTo(x - 46, y - 10, x - 30, y - 42, x, y - 20); c.bezierCurveTo(x + 30, y - 42, x + 46, y - 10, x, y + 20); c.fill(); c.stroke(); } else if (type === 'star') { c.beginPath(); for (var i = 0; i < 10; i++) { var a = -Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? 17 : 37; c.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r); } c.closePath(); c.fill(); c.stroke(); } else { c.beginPath(); c.arc(x, y, 36, 0, 7); c.fill(); c.stroke(); c.fillStyle = C.cream; c.beginPath(); c.arc(x + 12, y - 2, 30, 0, 7); c.fill(); c.restore(); } }
   function card(c, p, i, manage) { var x = 100 + i * 380; G.panel(x, 180, 340, 260, C.cream, 28); c.fillStyle = p.color; c.beginPath(); c.arc(x + 170, 260, 60, 0, 7); c.fill(); G.text(p.name, x + 170, 355, { size: 31, color: C.ink, max: 280 }); G.text(p.level === 2 ? 'Grande' : 'Piccolo', x + 170, 395, { size: 21, color: C.steel2 }); G.ui.button({ id: (manage ? 'use-' : 'login-') + p.id, x: x + 46, y: 465, w: 248, h: 88, r: 22, color: p.color, textColor: C.ink, label: manage ? 'SCEGLI' : 'GIOCA', fontSize: 27, onTap: function () { G.accounts.login(p.id); } }); }
 
-  G.scene('accesso', { enter: function () { if (G.hush) G.hush(); }, draw: function (c) {
+  G.scene('accesso', { enter: function () { if (G.hush) G.hush(); hideWizard(); }, draw: function (c) {
     G.workshopBg(); G.text('CHI GIOCA?', W / 2, 80, { size: 54, color: C.sun, stroke: C.ink, sw: 10 });
     if (!list.length) G.text('Crea il primo profilo', W / 2, 190, { size: 34, color: C.cream });
     list.slice(0, 3).forEach(function (p, i) { card(c, p, i, false); });
@@ -39,7 +67,7 @@
     if (list.length) G.ui.button({ id: 'manage-profile', x: 1010, y: 24, w: 240, h: 70, r: 20, color: C.steel2, label: 'GENITORI', fontSize: 23, onTap: function () { gate.hold = 0; gate.unlocked = false; G.go('genitori'); } });
   } });
 
-  G.scene('nuovo', { enter: function () { draft = { name: 'Dino', color: C.green, level: 1, secret: [] }; }, draw: function (c) {
+  G.scene('nuovo', { enter: function () { draft = { name: 'Dino', color: C.green, level: 1, secret: [] }; showWizard(); }, draw: function (c) {
     G.workshopBg(); G.text('NUOVO DINO', W / 2, 74, { size: 50, color: C.sun, stroke: C.ink, sw: 9 });
     G.ui.button({ id: 'name', x: 180, y: 145, w: 420, h: 90, r: 22, color: C.cream, textColor: C.ink, label: draft.name, fontSize: 32, onTap: function () { draft.name = nameFor(); } });
     G.text('Scegli colore ed età', 850, 160, { size: 26, color: C.cream });
@@ -47,12 +75,41 @@
     G.ui.button({ id: 'small', x: 650, y: 305, w: 260, h: 82, r: 22, color: draft.level === 1 ? C.green : C.steel2, label: 'PICCOLO', fontSize: 27, onTap: function () { draft.level = 1; } });
     G.ui.button({ id: 'big', x: 930, y: 305, w: 260, h: 82, r: 22, color: draft.level === 2 ? C.red : C.steel2, label: 'GRANDE', fontSize: 27, onTap: function () { draft.level = 2; } });
     G.text('Segreto facoltativo: tocca tre figure', W / 2, 420, { size: 25, color: C.cream });
-    secretShapes.forEach(function (shape, i) { G.ui.button({ id: 'secret-' + i, x: 440 + i * 145, y: 450, w: 110, h: 90, r: 22, color: draft.secret.indexOf(i) >= 0 ? C.sun : C.steel2, label: shape === 'cuore' ? '♥' : shape === 'stella' ? '★' : '☾', textColor: C.ink, fontSize: 42, onTap: function () { if (draft.secret.length < 3 && draft.secret.indexOf(i) < 0) draft.secret.push(i); else if (draft.secret.indexOf(i) >= 0) draft.secret.splice(draft.secret.indexOf(i), 1); } }); });
+    secretShapes.forEach(function (shape, i) {
+      var bx = 410 + (i % 5) * 96, by = 430 + Math.floor(i / 5) * 82;
+      G.ui.button({ id: 'secret-' + i, x: bx, y: by, w: 82, h: 70, r: 18, color: draft.secret.indexOf(i) >= 0 ? C.sun : C.steel2, label: shape, textColor: C.ink, fontSize: 34, onTap: function () { if (draft.secret.length < 3 && draft.secret.indexOf(i) < 0) draft.secret.push(i); else if (draft.secret.indexOf(i) >= 0) draft.secret.splice(draft.secret.indexOf(i), 1); } });
+    });
     G.ui.button({ id: 'create-profile', x: 340, y: 590, w: 300, h: 92, r: 22, color: C.green, label: 'CREA', fontSize: 31, onTap: function () { var p = G.accounts.create(draft); G._profileLogin(p.id); G.go('menu'); } });
     G.ui.button({ id: 'cancel-profile', x: 680, y: 590, w: 300, h: 92, r: 22, color: C.steel2, label: 'INDIETRO', fontSize: 28, onTap: function () { G.go('accesso'); } });
   } });
 
-  G.scene('segreto', { enter: function () { gate.hold = 0; }, draw: function (c) { G.workshopBg(); G.text('IL SEGRETO DEL DINO', W / 2, 100, { size: 43, color: C.sun, stroke: C.ink, sw: 9 }); G.text('Tocca le tre figure nell’ordine', W / 2, 170, { size: 28, color: C.cream }); secretShapes.forEach(function (shape, i) { G.ui.button({ id: 'check-' + i, x: 390 + i * 170, y: 275, w: 130, h: 130, r: 28, color: C.plum, label: shape === 'cuore' ? '♥' : shape === 'stella' ? '★' : '☾', fontSize: 56, onTap: function () { var p = profile(pending), want = p && p.secret ? p.secret : []; if (want[gate.hold] === i) { gate.hold++; if (gate.hold >= want.length) { var id = pending; pending = null; gate.hold = 0; G._profileLogin(id); G.go('menu'); } } else { gate.hold = 0; G.say('Riproviamo insieme.'); } } }); }); G.text(gate.hold ? 'Figure: ' + gate.hold + ' / 3' : 'Inizia dal primo simbolo', W / 2, 500, { size: 28, color: C.cream }); G.ui.button({ id: 'secret-back', x: 470, y: 590, w: 340, h: 90, r: 22, color: C.steel2, label: 'INDIETRO', fontSize: 28, onTap: function () { pending = null; G.go('accesso'); } }); } });
+  G.scene('segreto', {
+    enter: function () { gate.hold = 0; hideWizard(); },
+    draw: function (c) {
+      G.workshopBg();
+      G.text('IL SEGRETO DEL DINO', W / 2, 70, { size: 43, color: C.sun, stroke: C.ink, sw: 9 });
+      G.text('Tocca le tre figure nell’ordine', W / 2, 125, { size: 28, color: C.cream });
+      secretShapes.forEach(function (shape, i) {
+        var bx = 405 + (i % 5) * 100, by = 170 + Math.floor(i / 5) * 112;
+        G.ui.button({
+          id: 'check-' + i, x: bx, y: by, w: 86, h: 90, r: 20, color: C.plum,
+          label: shape, fontSize: 42,
+          onTap: function () {
+            var p = profile(pending), want = p && p.secret ? p.secret : [];
+            if (want[gate.hold] === i) {
+              gate.hold++;
+              if (gate.hold >= want.length) {
+                var id = pending; pending = null; gate.hold = 0;
+                G._profileLogin(id); G.go('menu');
+              }
+            } else { gate.hold = 0; G.say('Riproviamo insieme.'); }
+          }
+        });
+      });
+      G.text(gate.hold ? 'Figure: ' + gate.hold + ' / 3' : 'Inizia dal primo simbolo', W / 2, 500, { size: 28, color: C.cream });
+      G.ui.button({ id: 'secret-back', x: 470, y: 590, w: 340, h: 90, r: 22, color: C.steel2, label: 'INDIETRO', fontSize: 28, onTap: function () { pending = null; G.go('accesso'); } });
+    }
+  });
 
   G.scene('genitori', { update: function (dt) { if (!gate.unlocked && gate.hold > 0 && G.pointer.down) gate.hold = Math.max(0, gate.hold - dt); }, draw: function (c) {
     G.workshopBg(); G.text('AREA GENITORI', W / 2, 80, { size: 48, color: C.sun, stroke: C.ink, sw: 9 });

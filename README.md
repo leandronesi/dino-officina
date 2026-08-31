@@ -12,6 +12,7 @@ Gioco canvas/PWA offline per tablet: si prendono pezzi grandi da un vassoio, si 
 - ciclo completo **monto → provo → aggiusto → riprovo**;
 - salvataggio locale di stelle e missioni completate;
 - profili separati per ogni bambino (nome, colore, Piccolo/Grande e segreto facoltativo a tre figure);
+- creazione guidata in quattro passi con tastiera/overlay del tablet (nessun prompt del browser), nove figure per il segreto e pulsante per saltarlo;
 - accesso richiesto a ogni avvio e cambio profilo protetto dall'area genitori;
 - migrazione automatica del precedente salvataggio singolo nel profilo `Dino`;
 - PWA installabile e utilizzabile offline, senza asset esterni o licenziati.
