@@ -2,11 +2,14 @@
 
 Gioco canvas/PWA offline per tablet: si prendono pezzi grandi da un vassoio, si agganciano al banco e si prova la macchina. Se qualcosa è fuori posto, il gioco indica cosa aggiustare.
 
-## Cosa c’è nella prima versione
+## Cosa c’è
 
 - profili di difficoltà **Piccolo** e **Grande**;
 - costruzione libera, senza errori e con almeno tre pezzi;
-- tre missioni: Dino-mobile, Gru Gialla e Macchina del Vento;
+- **100 progetti rigiocabili e strutturalmente distinti**, organizzati in dieci raccolte da dieci: ruote, cantiere, cielo, mare, spazio, fattoria, soccorso, città, robot e festa;
+- album a due livelli: prima si sceglie una raccolta, poi si sfogliano al massimo quattro progetti per pagina;
+- scorciatoie **Continua** e **Sorprendimi** per giocare senza attraversare tutto l’album;
+- sedici tipi di pezzi originali, combinati da schede dati invece di duplicare la logica del gioco;
 - controllo touch: trascina un pezzo oppure toccalo per agganciarlo automaticamente;
 - sagome, agganci lampeggianti e pulsante **Aiuto**;
 - ciclo completo **monto → provo → aggiusto → riprovo**;
@@ -30,9 +33,11 @@ Aprire `http://localhost:8000`. Il gioco è pensato per un tablet in orizzontale
 
 ```bash
 node test/smoke.js
+node test/look.js
 ```
 
-Il test avvia l’intero bundle in un canvas simulato e attraversa tutte le missioni, la modalità libera e un montaggio errato in modalità Grande.
+Il test avvia l’intero bundle in un canvas simulato, verifica i profili e la migrazione dei salvataggi, controlla che le 100 strutture restino uniche anche ignorando una traslazione globale, apre e completa tutti i progetti, attraversa le pagine dell’album, prova la modalità libera e controlla un montaggio errato in modalità Grande.
+Il controllo visuale apre il gioco in Chrome headless e aggiorna quattro schermate di riferimento in `test/frames/`.
 
 ## Sito pubblico
 

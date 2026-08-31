@@ -1,6 +1,6 @@
 /* La pagina è network-first: un nuovo deploy deve comparire subito. Gli asset
    restano cache-first, così il gioco continua a partire anche senza rete. */
-var CACHE = 'dino-officina-3a415f26f3';
+var CACHE = 'dino-officina-bdbfb096d9';
 var NAV_TIMEOUT = 2500;
 var SHELL = ['./','./index.html','./manifest.webmanifest','./icon.svg','./icon-180.png','./icon-192.png','./icon-512.png','./icon-maskable-512.png'];
 

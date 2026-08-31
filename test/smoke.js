@@ -34,7 +34,36 @@ var protectedProfile=G.accounts.create({name:'Protetto',color:G.C.blue,level:2,s
 G.accounts.login(protectedProfile.id); pump(2); check(G.current==='segreto','il segreto non apre la schermata protetta');
 tap(748,215);tap(848,215);tap(748,327);pump(2);check(G.current==='menu'&&G.account.id===protectedProfile.id,'il segreto con figure 4-9 non sblocca il profilo');
 G._profileLogin('legacy'); G.go('menu'); pump(2);
-['monopattino','gru','vento'].forEach(function(id){G.go('officina',{id:id});pump(3);check(G.officinaAutoBuild(false)>3,id+': montaggio incompleto');G.officinaTest();pump(150);let s=G.officinaState();check(s.state==='win',id+': prova non arriva alla vittoria ('+s.state+')');});
+var catalog=G.officinaCatalog, all=catalog&&catalog.projects||[], ids=new Set(all.map(function(p){return p.id;}));
+// Sottrarre minX/minY rende invisibile una traslazione globale: due progetti
+// uguali spostati di pochi pixel devono quindi collidere e far fallire il test.
+function structureSignature(p){
+  var minX=Math.min.apply(Math,p.slots.map(function(q){return q[1];}));
+  var minY=Math.min.apply(Math,p.slots.map(function(q){return q[2];}));
+  return p.slots.map(function(q){
+    var rot=Math.round((((q[3]%(Math.PI*2))+(Math.PI*2))%(Math.PI*2))*1000)/1000;
+    return q[0]+'@'+Math.round((q[1]-minX)*100)/100+','+Math.round((q[2]-minY)*100)/100+','+rot;
+  }).sort().join('|');
+}
+var structures=new Set(all.map(structureSignature));
+check(catalog&&catalog.families.length===10,'il catalogo non ha 10 raccolte');
+check(all.length===100,'il catalogo non ha 100 progetti: '+all.length);
+check(ids.size===100,'gli id dei cento progetti non sono unici');
+check(structures.size===100,'due o piu progetti hanno la stessa struttura, anche ignorando una traslazione globale: '+structures.size+' di 100');
+catalog.families.forEach(function(f){check(catalog.inFamily(f.id).length===10,f.id+': la raccolta non ha 10 progetti');});
+all.forEach(function(p){
+  check(catalog.byId(p.id)===p,p.id+': non e selezionabile per id');
+  check(p.slots.length>=4&&p.slots.length<=7,p.id+': numero di pezzi fuori misura');
+  check(p.tray.length===p.slots.length,p.id+': vassoio e agganci non coincidono');
+  G.go('officina',{id:p.id});pump(2);
+  check(G.officinaState().id===p.id,p.id+': il banco ha aperto il progetto sbagliato');
+  check(G.officinaAutoBuild(false)===p.slots.length,p.id+': montaggio incompleto');
+  G.officinaTest();pump(140);var state=G.officinaState();
+  check(state.state==='win',p.id+': prova non arriva alla vittoria ('+state.state+')');
+});
+check(Object.keys(G.save.done).filter(function(id){return catalog.byId(id)&&id!=='libera';}).length===100,'non tutti i cento progetti risultano completati e rigiocabili');
 G.go('officina',{id:'libera'});pump(2);G.officinaAutoBuild(false);G.officinaTest();pump(150);check(G.officinaState().state==='win','libera non funziona');
 G.level=2;G.go('officina',{id:'gru'});pump(2);G.officinaAutoBuild(true);G.officinaTest();pump(150);check(G.officinaState().state==='adjust','errore Grande non porta ad aggiusta');check(G.officinaState().wrong.length>0,'pezzo sbagliato non evidenziato');
-if(errors.length){console.error('✗ collaudo fallito\n - '+errors.slice(0,30).join('\n - '));process.exit(1);}console.log('✓ Dino Officina: menu, 3 missioni, libera e ciclo aggiusta puliti');
+G.go('famiglie');pump(3);check(G.current==='famiglie','album raccolte non apribile');tap(1140,656);check(G.catalogViewState().familyPage===1,'seconda pagina raccolte non raggiungibile');
+G.catalogOpenFamily('spazio');pump(3);check(G.current==='progetti'&&G.catalogViewState().family==='spazio','raccolta spazio non apribile');tap(1140,656);tap(1140,656);check(G.catalogViewState().projectPage===2,'terza pagina progetti non raggiungibile');
+if(errors.length){console.error('✗ collaudo fallito\n - '+errors.slice(0,30).join('\n - '));process.exit(1);}console.log('✓ Dino Officina: 100 progetti, 10 raccolte, libera, profili e ciclo aggiusta puliti');
