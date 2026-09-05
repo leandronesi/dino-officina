@@ -12,10 +12,10 @@
   G.dist = function (a,b,c,d) { return Math.hypot(a-c,b-d); };
 
   var cv=document.getElementById('c'), c=G.ctx=cv.getContext('2d',{alpha:false}), view=G.view={s:1,ox:0,oy:0,dpr:1};
-  function resize(){ var cw=innerWidth,ch=innerHeight,dpr=Math.min(devicePixelRatio||1,2.5); view.s=Math.min(cw/W,ch/H); view.ox=(cw-W*view.s)/2; view.oy=(ch-H*view.s)/2; view.dpr=dpr; cv.width=Math.max(1,Math.round(cw*dpr)); cv.height=Math.max(1,Math.round(ch*dpr)); cv.style.width=cw+'px';cv.style.height=ch+'px'; var r=document.getElementById('rot'); if(r)r.classList.toggle('on',ch>cw*1.08); }
+  function resize(){ var cw=innerWidth,ch=innerHeight,dpr=Math.min(devicePixelRatio||1,1.5,1440/Math.max(innerWidth,innerHeight)); view.s=Math.min(cw/W,ch/H); view.ox=(cw-W*view.s)/2; view.oy=(ch-H*view.s)/2; view.dpr=dpr; cv.width=Math.max(1,Math.round(cw*dpr)); cv.height=Math.max(1,Math.round(ch*dpr)); cv.style.width=cw+'px';cv.style.height=ch+'px'; var r=document.getElementById('rot'); if(r)r.classList.toggle('on',ch>cw*1.08); }
   addEventListener('resize',resize); addEventListener('orientationchange',function(){setTimeout(resize,120);}); resize();
   G.roundRect=function(x,y,w,h,r){r=Math.min(r,w/2,h/2);c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();};
-  G.panel=function(x,y,w,h,color,r){c.save();c.shadowColor=G.C.shadow;c.shadowBlur=18;c.shadowOffsetY=8;G.roundRect(x,y,w,h,r||28);c.fillStyle=color||G.C.cream;c.fill();c.shadowColor='transparent';c.restore();};
+  G.panel=function(x,y,w,h,color,r){c.save();c.shadowColor=G.C.shadow;c.shadowBlur=0;c.shadowOffsetY=8;G.roundRect(x,y,w,h,r||28);c.fillStyle=color||G.C.cream;c.fill();c.shadowColor='transparent';c.restore();};
   G.text=function(s,x,y,o){o=o||{};c.save();c.font=(o.weight||900)+' '+(o.size||32)+'px "Trebuchet MS","Segoe UI",sans-serif';c.textAlign=o.align||'center';c.textBaseline=o.base||'middle';if(o.stroke){c.lineJoin='round';c.lineWidth=o.sw||8;c.strokeStyle=o.stroke;c.strokeText(String(s),x,y,o.max);}c.fillStyle=o.color||G.C.ink;c.fillText(String(s),x,y,o.max);c.restore();};
   G.shade=function(hex,n){var v=parseInt(hex.slice(1),16),r=G.clamp((v>>16)+n,0,255),g=G.clamp(((v>>8)&255)+n,0,255),b=G.clamp((v&255)+n,0,255);return '#'+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);};
 
@@ -32,7 +32,7 @@
   function clean(s){var b=blank(),k;if(!s||typeof s!=='object'||Array.isArray(s))return b;for(k in b)if(s[k]===undefined||s[k]===null)s[k]=b[k];if(typeof s.done!=='object'||Array.isArray(s.done))s.done={};if(typeof s.stars!=='number'||!isFinite(s.stars)||s.stars<0)s.stars=0;s.stars=Math.floor(s.stars);return s;}
   function readProfile(id){var p=profiles.filter(function(q){return q.id===id;})[0],s=null;if(p&&p.id==='legacy')s=legacy||null;try{s=s||JSON.parse(localStorage.getItem(LEGACY_KEY+'.'+id)||'null');}catch(e){}return clean(s);}
   G._profiles=profiles; G._activeId=null; G.account=null; G.save=clean(legacy); G.level=G.save.level===2?2:1;
-  G._profileLogin=function(id){var p=profiles.filter(function(q){return q.id===id;})[0];if(!p)return false;G._activeId=p.id;G.account=p;G.save=readProfile(p.id);G.level=p.level===2?2:1;G.save.level=G.level;try{localStorage.setItem(LEGACY_KEY+'.'+p.id,JSON.stringify(G.save));localStorage.setItem('dino-officina.last',p.id);}catch(e){}return true;};
+  G._profileLogin=function(id){var p=profiles.filter(function(q){return q.id===id;})[0];if(!p)return false;if(G._activeId)G.saveNow();G._activeId=p.id;G.account=p;G.save=readProfile(p.id);G.level=p.level===2?2:1;G.save.level=G.level;try{localStorage.setItem(LEGACY_KEY+'.'+p.id,JSON.stringify(G.save));localStorage.setItem('dino-officina.last',p.id);}catch(e){}return true;};
   G._profileLogout=function(){G.saveNow();G._activeId=null;G.account=null;G.save=blank();G.level=1;};
   G.saveNow=function(){G.save.level=G.level;if(G.account)G.account.level=G.level;try{localStorage.setItem(LEGACY_KEY+(G._activeId?'.'+G._activeId:''),JSON.stringify(G.save));if(G._activeId)localStorage.setItem(PROFILES_KEY,JSON.stringify(profiles));}catch(e){}};
   G._blankSave=blank; G._profilesKey=PROFILES_KEY;

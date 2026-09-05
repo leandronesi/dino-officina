@@ -1,6 +1,6 @@
 /* La pagina è network-first: un nuovo deploy deve comparire subito. Gli asset
    restano cache-first, così il gioco continua a partire anche senza rete. */
-var CACHE = 'dino-officina-bdbfb096d9';
+var CACHE = 'dino-officina-03062192fe';
 var NAV_TIMEOUT = 2500;
 var SHELL = ['./','./index.html','./manifest.webmanifest','./icon.svg','./icon-180.png','./icon-192.png','./icon-512.png','./icon-maskable-512.png'];
 
@@ -11,7 +11,7 @@ self.addEventListener('install', function (e) {
 });
 self.addEventListener('activate', function (e) {
   e.waitUntil(caches.keys().then(function (ks) {
-    return Promise.all(ks.filter(function (k) { return k !== CACHE; }).map(function (k) { return caches.delete(k); }));
+    return Promise.all(ks.filter(function (k) { return k.indexOf('dino-officina-') === 0 && k !== CACHE; }).map(function (k) { return caches.delete(k); }));
   }).then(function () { return self.clients.claim(); }));
 });
 function cachedPage(req) {

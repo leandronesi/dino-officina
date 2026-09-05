@@ -32,7 +32,7 @@ var sibling=G.accounts.create({name:'Sorella',color:G.C.pink,level:1,secret:null
 G.accounts.login(sibling.id); check(G.save.stars===0,'i salvataggi dei profili non sono separati'); G.accounts.login('legacy'); pump(2);
 var protectedProfile=G.accounts.create({name:'Protetto',color:G.C.blue,level:2,secret:[3,4,8]});
 G.accounts.login(protectedProfile.id); pump(2); check(G.current==='segreto','il segreto non apre la schermata protetta');
-tap(748,215);tap(848,215);tap(748,327);pump(2);check(G.current==='menu'&&G.account.id===protectedProfile.id,'il segreto con figure 4-9 non sblocca il profilo');
+tap(742,382);tap(914,382);tap(1086,554);pump(2);check(G.current==='menu'&&G.account.id===protectedProfile.id,'il segreto con figure 4-9 non sblocca il profilo');
 G._profileLogin('legacy'); G.go('menu'); pump(2);
 var catalog=G.officinaCatalog, all=catalog&&catalog.projects||[], ids=new Set(all.map(function(p){return p.id;}));
 // Sottrarre minX/minY rende invisibile una traslazione globale: due progetti
