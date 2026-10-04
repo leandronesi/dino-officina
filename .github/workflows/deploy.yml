@@ -25,7 +25,6 @@ jobs:
       - name: Build e collaudo
         run: |
           node build.js
-          node make-icons.js
           node test/smoke.js
       - name: Prepara il sito
         run: |
