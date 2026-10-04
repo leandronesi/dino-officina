@@ -29,7 +29,16 @@ async function main(){
   await call('Page.navigate',{url:origin+'/'});
   for(let i=0;i<100;i++){await delay(50);if(await run("!!(window.G && G.current==='accesso')"))break;}
   await run("const a=G.accounts.create({name:'Leo',color:G.C.dino,level:1});G.accounts.login(a.id);G.save.officina={open:19,stars:{0:3,1:2},builds:{}};G.go('menu')");await delay(900);await shot('menu');
-  await run("G.go('officina',{mi:4})");await delay(700);await shot('shop-piccolo');
+  await run("G.go('officina',{mi:4})");await delay(700);await shot('shop-empty');
+  // real taps, from the empty frame to the road: barca, ruote piccole, elica, niente, then PROVA
+  const tapAt=async(x,y)=>{await call('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y,id:9}]});await delay(60);await call('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await delay(250);};
+  assert.equal(await run('G.officinaShop.complete()'),false,'starts empty');
+  await tapAt(950,660);assert.equal(await run('G.current'),'officina','PROVA waits for a complete vehicle');
+  for(const [x,y] of [[275,174],[173,324],[377,474],[173,624]])await tapAt(x,y);
+  assert.equal(await run('JSON.stringify(G.officinaShop.state().v)'),JSON.stringify({telaio:'barca',ruote:'piccole',motore:'elica',extra:'niente'}),'four real taps mount four pieces');
+  await shot('shop-piccolo');
+  await tapAt(950,660);await delay(700);assert.equal(await run('G.current'),'strada','a real tap on PROVA opens the road');console.log('touch: empty frame, four pieces and PROVA by real taps');
+
   await run("G.level=2;G.go('officina',{mi:14})");await delay(700);await shot('shop-grande');
   const drives=[[4,'barca','piccole','elica','niente',2600,'water'],[3,'auto','grandi','normale','niente',2300,'steep'],[8,'auto','piccole','normale','razzo',1500,'rocket'],[18,'auto','piccole','turbo','palloncini',2400,'balloons'],[12,'auto','cingoli','normale','niente',2600,'tracks']];
   for(const [mi,t1,r1,m1,e1,ms,name] of drives){

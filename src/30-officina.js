@@ -1,10 +1,13 @@
 /* The workshop: four rows of pieces on the left, the vehicle on the lift on
    the right, and PROVA.
-   Piccolo: a framed picture of the vehicle to build ("il progetto"); the rows
-   that do not match it blink, a wrong card is gently refused, and PROVA
-   lights up when the vehicle matches the picture — the old Officina puzzle.
-   Grande: free choice. The mission shows what is on the road (hill, river,
-   ravine, wall) as pictures, and working out which pieces it needs is the game. */
+   Every mission starts from an empty frame and any piece can go on: the road
+   decides. A wrong piece is not refused here — the vehicle just will not
+   climb the hill, float on the river or clear the ravine, and the road says
+   why and offers 'Aggiusta'.
+   Piccolo: a framed picture of the vehicle ('il progetto') to copy; a green
+   tick marks every row that matches it. Grande: no picture; the mission shows
+   what is on the road (hill, river, ravine, wall), and working out which
+   pieces it needs is the game. */
 (function () {
   'use strict';
   var C = G.C, W = G.W, H = G.H;
@@ -17,8 +20,10 @@
     return s;
   };
   function mission() { return S.mi >= 0 ? G.percorsi.MISSIONS[S.mi] : G.percorsi.FREE; }
-  function matches(slot) { return S.mi < 0 || G.level !== 1 || S.v[slot] === mission().sol[slot]; }
-  function allMatch() { return G.officina.SLOTS.every(matches); }
+  // the project is a picture to copy, never a lock: any piece can go on, and the road decides
+  function matches(slot) { return S.mi >= 0 && G.level === 1 && S.v[slot] === mission().sol[slot]; }
+  function complete() { return G.officina.SLOTS.every(function (s) { return !!S.v[s]; }); }
+  var EMPTY = function () { return { telaio: null, ruote: null, motore: null, extra: null }; };
 
   function obstacleKinds(m) { var k = []; m.course.obst.forEach(function (o) { if (k.indexOf(o.k) < 0) k.push(o.k); }); return k; }
   function obstIcon(c, k, x, y, s) {
@@ -38,25 +43,21 @@
     S = { mi: o.mi === undefined ? -1 : o.mi, refuse: 0, refuseSlot: null, hint: o.hint || null, snap: {} };
     m = mission();
     var prev = sv.builds[S.mi];
-    if (o.keep && prev) S.v = JSON.parse(JSON.stringify(prev));
-    else if (G.level === 1 && S.mi >= 0) S.v = { telaio: 'auto', ruote: 'piccole', motore: 'normale', extra: 'niente' };
-    else S.v = prev ? JSON.parse(JSON.stringify(prev)) : { telaio: 'auto', ruote: 'piccole', motore: 'normale', extra: 'niente' };
+    // every mission starts from an empty frame: building it is the game. 'Aggiusta' keeps what you had.
+    S.v = o.keep && prev ? JSON.parse(JSON.stringify(prev)) : EMPTY();
     if (!G.mute) setTimeout(function () {
       if (G.current !== 'officina') return;
       if (S.mi < 0) G.say('Monta quello che vuoi, poi provalo!');
-      else if (G.level === 1) G.say('Guarda il progetto e monta i pezzi giusti!');
+      else if (G.level === 1) G.say('Guarda il progetto e monta i pezzi!');
       else G.say(m.name + '. Guarda cosa c\'è sulla strada e scegli i pezzi.');
     }, 300);
   }
   function choose(slot, id) {
-    if (G.level === 1 && S.mi >= 0 && mission().sol[slot] !== id) {
-      S.refuse = .6; S.refuseSlot = slot; G.sfx('bad'); G.say('Guarda il progetto!'); return;
-    }
     S.v[slot] = id; S.snap[slot] = .35; G.sfx('pop');
-    if (G.level === 1 && allMatch()) G.say('Perfetto! Ora tocca PROVA.');
+    if (complete()) G.say('Pronto! Tocca PROVA.');
   }
   function prova() {
-    if (!allMatch()) { G.sfx('bad'); G.say('Mancano dei pezzi: guarda il progetto.'); return; }
+    if (!complete()) { G.sfx('bad'); G.say('Mancano dei pezzi!'); return; }
     var sv = G.officinaSave(); sv.builds[S.mi] = JSON.parse(JSON.stringify(S.v)); G.saveNow();
     G.go('strada', { mi: S.mi, v: JSON.parse(JSON.stringify(S.v)) });
   }
@@ -75,10 +76,10 @@
     G.text(S.mi >= 0 ? (G.percorsi.RACCOLTE[m.r].name + ' · ' + m.name) : 'Officina libera', 640, 48, { size: 34, color: C.sun, maxWidth: 760 });
     // the rows of pieces
     OF.SLOTS.forEach(function (slot, r) {
-      var y = ROWS[r], ok = matches(slot), blink = !ok && Math.sin(G.t * 8) > 0;
+      var y = ROWS[r], ok = matches(slot), blink = !S.v[slot] && Math.sin(G.t * 6) > 0;   // an empty row asks for a piece
       c.fillStyle = blink ? 'rgba(255,159,67,.45)' : 'rgba(255,255,255,.35)'; G.roundRect(c, 26, y - 8, 630, CARD.h + 16, 20); c.fill();
       G.text(LABEL[slot], 74, y + CARD.h / 2, { size: 21, color: C.leafDeep, maxWidth: 96 });
-      if (G.level === 1 && S.mi >= 0 && ok) { c.fillStyle = C.leaf; c.beginPath(); c.arc(74, y + 20, 14, 0, 7); c.fill(); c.strokeStyle = '#fff'; c.lineWidth = 4; c.beginPath(); c.moveTo(67, y + 20); c.lineTo(73, y + 26); c.lineTo(82, y + 14); c.stroke(); }
+      if (ok) { c.fillStyle = C.leaf; c.beginPath(); c.arc(74, y + 20, 14, 0, 7); c.fill(); c.strokeStyle = '#fff'; c.lineWidth = 4; c.beginPath(); c.moveTo(67, y + 20); c.lineTo(73, y + 26); c.lineTo(82, y + 14); c.stroke(); }
       OF.PARTS[slot].forEach(function (p, i) {
         var cx = CARD.x0 + i * (CARD.w + CARD.gap), sel = S.v[slot] === p.id, shake = S.refuse > 0 && S.refuseSlot === slot ? Math.sin(G.t * 60) * 4 : 0;
         c.fillStyle = sel ? '#fff6e0' : 'rgba(255,246,224,.75)'; G.roundRect(c, cx + shake, y, CARD.w, CARD.h, 18); c.fill();
@@ -91,7 +92,7 @@
     // the lift and the vehicle
     c.fillStyle = '#6e7780'; c.fillRect(760, 560, 340, 22); c.fillRect(920, 582, 20, 40);
     var bounce = 0; OF.SLOTS.forEach(function (s) { if (S.snap[s] > 0) bounce = Math.max(bounce, S.snap[s]); });
-    OF.drawVehicle(c, S.v, 930, 560 - Math.sin(bounce * 9) * 10 * bounce, { s: 1.3, t: G.t, happy: G.level === 1 && allMatch() });
+    OF.drawVehicle(c, S.v, 930, 560 - Math.sin(bounce * 9) * 10 * bounce, { s: 1.3, t: G.t, happy: complete() });
     // Piccolo: the picture to copy. Grande: what waits on the road.
     if (S.mi >= 0 && G.level === 1) {
       c.fillStyle = '#fff6e0'; G.roundRect(c, 760, 112, 340, 210, 20); c.fill(); c.strokeStyle = '#8a5a32'; c.lineWidth = 8; c.stroke();
@@ -105,7 +106,7 @@
       ks.forEach(function (k, i) { obstIcon(c, k, x0 + i * 110, 208, 1.05); });
       if (S.hint) { c.fillStyle = C.tangerine; G.roundRect(c, 700, 270, 560, 54, 18); c.fill(); G.text(G.strada.HINT[S.hint], 980, 297, { size: 21, color: '#fff', maxWidth: 540 }); }
     }
-    var ready = allMatch();
+    var ready = complete();
     G.ui.button({ id: 'prova', x: 800, y: 612, w: 300, h: 96, r: 28, color: ready ? C.leaf : '#b9ada0', label: 'PROVA!', fontSize: 44, onTap: prova });
   }
 
@@ -113,5 +114,5 @@
     hud: false, back: false, enter: enter, draw: draw,
     update: function (dt) { S.refuse = Math.max(0, S.refuse - dt); for (var k in S.snap) S.snap[k] = Math.max(0, S.snap[k] - dt); }
   });
-  G.officinaShop = { state: function () { return S; }, choose: choose, prova: prova, allMatch: allMatch };
+  G.officinaShop = { state: function () { return S; }, choose: choose, prova: prova, complete: complete, matches: matches };
 })();

@@ -65,12 +65,15 @@ h=drive(by('Il muro'),BASE,20);assert.equal(h.hint,'wall');
 // ---- the passive child goes nowhere
 assert(!drive(0,P.MISSIONS[0].sol,30,{passive:true}).ok,'without the pedal nothing moves');
 
-// ---- Piccolo: the project picture is a puzzle
-G.level=1;G.go('officina');G.sceneOf('officina').enter({mi:by('Il laghetto')});const shop=G.officinaShop;
-assert(!shop.allMatch(),'the plain vehicle does not match the boat project');
-shop.choose('ruote','grandi');assert.equal(shop.state().v.ruote,'piccole','a piece not in the picture is refused');
-shop.choose('telaio','barca');shop.choose('motore','elica');assert(shop.allMatch(),'the boat project is complete');
-// Grande chooses freely
+// ---- the workshop: an empty frame, every piece allowed, the picture only as a hint
+G.level=1;G.sceneOf('officina').enter({mi:by('Il laghetto')});const shop=G.officinaShop;
+assert(!shop.complete(),'every mission starts from an empty frame');assert.equal(shop.state().v.telaio,null);
+shop.choose('telaio','auto');assert.equal(shop.state().v.telaio,'auto','a piece that is not in the picture is NOT refused');assert(!shop.matches('telaio'));
+shop.choose('ruote','piccole');shop.choose('motore','normale');assert(!shop.complete(),'three pieces are not a vehicle');shop.choose('extra','niente');assert(shop.complete());
+shop.choose('telaio','barca');assert(shop.matches('telaio'),'the tick shows which rows match the picture');
+// Aggiusta keeps what was built
+shop.prova();G.sceneOf('officina').enter({mi:by('Il laghetto'),keep:true});assert.equal(G.officinaShop.state().v.telaio,'barca','Aggiusta keeps the vehicle');
+// Grande: same freedom, no picture
 G.level=2;G.sceneOf('officina').enter({mi:by('Il laghetto')});G.officinaShop.choose('ruote','cingoli');assert.equal(G.officinaShop.state().v.ruote,'cingoli');
 
 // ---- a win saves the stars and opens the next mission, per child

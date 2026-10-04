@@ -41,6 +41,7 @@
     o = o || {};
     var s = o.s || 1, ang = o.ang || 0, rot = o.rot || 0, t = o.t || G.t, col = o.color || (G.account && G.account.color) || C.dino;
     var r = WHEEL_R[v.ruote] || 20, bodyY = -r - 8;
+    if (!v.telaio || !v.ruote) return drawPartial(c, v, x, y, s, ang, rot, t, col, r, bodyY, o);
     c.save(); c.translate(x, y); c.scale(s, s); c.rotate(ang);
     if (o.ghost) c.globalAlpha = .28;
     // palloncini above everything else, on strings
@@ -63,7 +64,7 @@
       c.fillStyle = '#6e7780'; c.fillRect(-92, bodyY - 30, 14, 18);
       c.save(); c.translate(-96, bodyY - 21); c.scale(.35, 1); c.rotate(t * 30);
       c.fillStyle = '#8a5a32'; c.fillRect(-4, -30, 8, 60); c.fillRect(-30, -4, 60, 8); c.restore();
-    } else {
+    } else if (v.motore) {
       c.fillStyle = v.motore === 'turbo' ? '#e8362b' : '#7b8188'; G.roundRect(c, -96, bodyY - 36, 30, 28, 6); c.fill();
       c.fillStyle = '#4a4f55'; c.fillRect(-104, bodyY - 20, 12, 7);
       if (v.motore === 'turbo') { c.fillStyle = C.sun; c.beginPath(); c.moveTo(-84, bodyY - 36); c.lineTo(-80, bodyY - 48); c.lineTo(-76, bodyY - 36); c.fill(); }
@@ -93,6 +94,7 @@
       c.stroke();
     }
     // wheels / tracks
+    if (o.noWheels) { c.restore(); return; }
     if (v.ruote === 'cingoli') {
       c.fillStyle = '#3a3d44'; G.roundRect(c, -64, -2 * r, 128, 2 * r, r); c.fill();
       c.strokeStyle = '#6e7780'; c.lineWidth = 3; c.setLineDash ? c.setLineDash([6, 6]) : 0; c.lineDashOffset = -rot * 10;
@@ -100,6 +102,25 @@
       wheel(c, -42, -r, r * .7, rot); wheel(c, 42, -r, r * .7, rot); wheel(c, 0, -r, r * .55, rot);
     } else { wheel(c, -52, -r, r, rot); wheel(c, 52, -r, r, rot); }
     c.restore();
+  }
+
+  /* a vehicle still being built: a bare frame on stands, and only the pieces already on it */
+  function drawPartial(c, v, x, y, s, ang, rot, t, col, r, bodyY, o) {
+    c.save(); c.translate(x, y); c.scale(s, s);
+    c.fillStyle = '#6e7780'; c.fillRect(-60, -r * 2 + 4, 14, r * 2 - 4); c.fillRect(46, -r * 2 + 4, 14, r * 2 - 4);
+    c.restore();
+    var full = { telaio: v.telaio || 'auto', ruote: v.ruote || 'piccole', motore: v.motore, extra: v.extra };
+    // the missing frame is drawn as an outline, missing wheels are not drawn at all
+    c.save(); c.translate(x, y); c.scale(s, s);
+    if (!v.telaio) { c.strokeStyle = '#6e7780'; c.lineWidth = 6; c.setLineDash && c.setLineDash([12, 10]); G.roundRect(c, -82, bodyY - 32, 166, 40, 16); c.stroke(); c.setLineDash && c.setLineDash([]); }
+    c.restore();
+    if (v.telaio) drawVehicle(c, { telaio: v.telaio, ruote: 'none', motore: v.motore, extra: v.extra }, x, y, Object.assign({}, o, { noWheels: true }));
+    if (v.ruote) {
+      c.save(); c.translate(x, y); c.scale(s, s);
+      if (v.ruote === 'cingoli') { c.fillStyle = '#3a3d44'; G.roundRect(c, -64, -2 * r, 128, 2 * r, r); c.fill(); wheel(c, -42, -r, r * .7, rot); wheel(c, 42, -r, r * .7, rot); }
+      else { wheel(c, -52, -r, r, rot); wheel(c, 52, -r, r, rot); }
+      c.restore();
+    }
   }
 
   /* one piece alone, for the cards in the workshop */

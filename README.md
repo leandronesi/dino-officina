@@ -26,10 +26,13 @@ officina. È il ciclo **monto → provo → aggiusto**.
 Gran tour) che si aprono una dopo l'altra, stelle in base ai frutti raccolti,
 e l'**Officina libera** per costruire quello che si vuole e fare un giro.
 
+Ogni missione parte da un **telaio vuoto**, e qualsiasi pezzo si può montare:
+**decide la strada**. Con il pezzo sbagliato il veicolo non sale, affonda o
+cade, e la strada dice perché.
+
 - **Piccolo** (3 anni): ogni missione mostra **il progetto**, la figura del
-  veicolo da montare. Le righe che non corrispondono lampeggiano, un pezzo
-  sbagliato viene rifiutato con dolcezza, e PROVA si accende quando il
-  veicolo è uguale alla figura.
+  veicolo da montare; una spunta verde segna le righe uguali alla figura. È un
+  suggerimento, non un lucchetto: se monta altro, lo scopre guidando.
 - **Grande** (6 anni): nessuna soluzione mostrata. La missione dice cosa c'è
   sulla strada (salita, fiume, burrone, muro) con i disegni, e capire quali
   pezzi servono è il gioco. Spesso le strade giuste sono più d'una.
