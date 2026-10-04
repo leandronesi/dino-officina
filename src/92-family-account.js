@@ -23,11 +23,6 @@
   ];
 
   function secretIcon(c, x, y, r, i) {
-    var legacy=G.current==='segreto' && sg && G.accounts.byId(sg.id);
-    if(legacy && legacy.secretVersion!==2){
-      if(i===6){c.save();c.strokeStyle=C.sun;c.fillStyle=C.sun;c.lineWidth=4;c.beginPath();c.arc(x,y,r*.5,0,7);c.fill();for(var ray=0;ray<8;ray++){var ang=ray*Math.PI/4;c.beginPath();c.moveTo(x+Math.cos(ang)*r*.7,y+Math.sin(ang)*r*.7);c.lineTo(x+Math.cos(ang)*r,y+Math.sin(ang)*r);c.stroke();}c.restore();return;}
-      i=[3,4,6,0,7,5,4,2,1][i];
-    }
     var k = SECRET_KEYS[i % SECRET_KEYS.length];
     var f = window.A && A.SHAPES && A.SHAPES[k.shape];
     if (f) { f(c, x, y, r, k.color); return; }

@@ -1,44 +1,51 @@
 # Dino Officina
 
-Gioco canvas/PWA offline per tablet: si prendono pezzi grandi da un vassoio, si agganciano al banco e si prova la macchina. Se qualcosa è fuori posto, il gioco indica cosa aggiustare.
+Monta il tuo veicolo e guidalo. Gioco canvas per tablet, offline, senza
+librerie né risorse esterne.
 
-## Cosa c’è
+## Come si gioca
 
-- profili di difficoltà **Piccolo** e **Grande**;
-- costruzione libera, senza errori e con almeno tre pezzi;
-- **100 progetti rigiocabili e strutturalmente distinti**, organizzati in dieci raccolte da dieci: ruote, cantiere, cielo, mare, spazio, fattoria, soccorso, città, robot e festa;
-- album a due livelli: prima si sceglie una raccolta, poi si sfogliano al massimo quattro progetti per pagina;
-- scorciatoie **Continua** e **Sorprendimi** per giocare senza attraversare tutto l’album;
-- sedici tipi di pezzi originali, combinati da schede dati invece di duplicare la logica del gioco;
-- controllo touch: trascina un pezzo oppure toccalo per agganciarlo automaticamente;
-- sagome, agganci lampeggianti e pulsante **Aiuto**;
-- ciclo completo **monto → provo → aggiusto → riprovo**;
-- salvataggio locale di stelle e missioni completate;
-- profili separati per ogni bambino (nome, colore, Piccolo/Grande e segreto facoltativo a tre figure);
-- creazione guidata in quattro passi con tastiera/overlay del tablet (nessun prompt del browser), nove figure per il segreto e pulsante per saltarlo;
-- accesso richiesto a ogni avvio e cambio profilo protetto dall'area genitori;
-- migrazione automatica del precedente salvataggio singolo nel profilo `Dino`;
-- PWA installabile e utilizzabile offline, senza asset esterni o licenziati.
+**In officina** si sceglie un pezzo per ciascuno dei quattro attacchi, e ogni
+pezzo cambia davvero come va il veicolo:
 
-## Avvio
+| Attacco | Pezzi |
+|---|---|
+| Telaio | macchina (veloce) · barca (galleggia) |
+| Ruote | piccole (veloci, salgono poco) · giganti (salgono le colline) · cingoli (salgono tutto, lenti) |
+| Motore | motore · turbo (più veloce, un po' più presa) · elica (spinge in acqua) |
+| Extra | niente · razzo (tasto: spinta) · ali (planano) · palloncini (leggero) · molla (tasto: salto) |
 
-```bash
+**Sulla strada** lo si guida, visto di lato: pedale verde a destra (o tutta
+la metà destra dello schermo), freno a sinistra, tasto rosso per razzo e
+molla. Colline, salite ripide, fiumi, burroni e muri: ognuno chiede il pezzo
+giusto. Chi cade in acqua o nel burrone riparte appena prima, con un
+consiglio; chi resta bloccato su una salita vede **Aggiusta**, che riporta in
+officina. È il ciclo **monto → provo → aggiusto**.
+
+**Venti missioni** in cinque raccolte (Prime gite, Acqua, Cielo, Montagna,
+Gran tour) che si aprono una dopo l'altra, stelle in base ai frutti raccolti,
+e l'**Officina libera** per costruire quello che si vuole e fare un giro.
+
+- **Piccolo** (3 anni): ogni missione mostra **il progetto**, la figura del
+  veicolo da montare. Le righe che non corrispondono lampeggiano, un pezzo
+  sbagliato viene rifiutato con dolcezza, e PROVA si accende quando il
+  veicolo è uguale alla figura.
+- **Grande** (6 anni): nessuna soluzione mostrata. La missione dice cosa c'è
+  sulla strada (salita, fiume, burrone, muro) con i disegni, e capire quali
+  pezzi servono è il gioco. Spesso le strade giuste sono più d'una.
+
+I profili sono quelli di tutta la collezione. I bambini della versione
+precedente vengono portati qui al primo avvio, con nome, colore, età, segreto
+e stelle.
+
+## Sviluppo
+
+```
 node build.js
-python -m http.server 8000
+node test/smoke.js   # ogni missione guidata col suo progetto; il veicolo base deve fallire dove c'è un ostacolo
+node test/look.js    # Chrome vero, muto: fotogrammi in test/frames e pedale toccato davvero
 ```
 
-Aprire `http://localhost:8000`. Il gioco è pensato per un tablet in orizzontale.
-
-## Collaudo
-
-```bash
-node test/smoke.js
-node test/look.js
-```
-
-Il test avvia l’intero bundle in un canvas simulato, verifica i profili e la migrazione dei salvataggi, controlla che le 100 strutture restino uniche anche ignorando una traslazione globale, apre e completa tutti i progetti, attraversa le pagine dell’album, prova la modalità libera e controlla un montaggio errato in modalità Grande.
-Il controllo visuale apre il gioco in Chrome headless e aggiorna quattro schermate di riferimento in `test/frames/`.
-
-## Sito pubblico
-
-Il workflow `.github/workflows/deploy.yml` pubblica automaticamente ogni push su `main` su `https://leandronesi.github.io/dino-officina/`. La prima volta, in **Settings → Pages**, la sorgente deve essere impostata su **GitHub Actions**.
+Pezzi e loro numeri in `src/10-veicolo.js`, percorsi e missioni in
+`src/20-percorsi.js`, guida in `src/40-strada.js`. Il collaudo verifica
+anche, ostacolo per ostacolo, che il pezzo giusto passi e quello sbagliato no.
