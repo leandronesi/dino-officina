@@ -54,6 +54,29 @@ async function main(){
   assert((await run('G.strada.state().x'))>x0+100,'holding the green pedal drives');console.log('touch: pedal drives');
   await run("G.strada.state().phase='win'");await delay(400);await shot('win');
 
+  await run("G.go('menu')");
+  await until("G.current==='menu'",'Bench menu did not load');
+  await delay(250);await tapAt(346,154);
+  await until("G.current==='banco' && G.banco.state().phase==='build'",'The bench card did not open the prototype');
+  await delay(300);await shot('bench-mounts');
+  await tapAt(1050,571);
+  await until("G.banco.state().phase==='fail'",'The inner wheelbase should get stuck');
+  await shot('bench-narrow');
+  await tapAt(480,455);
+  for(const [x,y] of [[353,477],[213,477],[491,477],[631,477]])await tapAt(x,y);
+  assert.equal(await run("G.banco.build().wheels.join(',')"),'0,3','Four real taps move both wheels outwards');
+  await tapAt(1050,571);
+  await until("G.banco.state().phase==='win'",'The wider wheelbase should reach the flag');
+  await shot('bench-wide');
+  await tapAt(480,455);
+  for(const [x,y] of [[213,477],[353,477],[631,477],[491,477],[298,347]])await tapAt(x,y);
+  assert.equal(await run("G.banco.build().rocket"),1,'A real tap mounts the rocket low');
+  await tapAt(1050,571);
+  await until("G.banco.state().x>=505 && G.banco.state().phase==='drive'",'Rocket launch did not reach the marker');
+  await tapAt(1111,628);await shot('bench-rocket');
+  await until("G.banco.state().phase==='win' && G.banco.state().used",'The lower rocket should carry the narrow vehicle across');
+  console.log('PASS bench: main menu, narrow versus wide wheels, low rocket, real taps');
+
   await run("G.level=1;G.go('menu')");
   await until("G.current==='menu'",'Rescue menu did not load');
   await delay(300);await tapAt(1038,153);

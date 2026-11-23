@@ -7,19 +7,27 @@
 
   function rescueCard(c, sv) {
     var rescued = Object.keys(sv.rescues).length;
-    var paint = c.createLinearGradient(125, 108, 1150, 205);
-    paint.addColorStop(0, '#224658'); paint.addColorStop(1, '#285b60');
-    c.fillStyle = '#173344'; G.roundRect(c, 120, 110, 1040, 105, 30); c.fill();
-    c.fillStyle = paint; G.roundRect(c, 120, 103, 1040, 105, 30); c.fill();
-    c.fillStyle = '#f8cb7c'; c.beginPath(); c.arc(184, 155, 38, 0, 7); c.fill();
-    G.officinaEgg(c, 184, 153, 25);
-    G.text('Squadra di soccorso', 246, 136, { size: 36, color: '#fff1bd', align: 'left' });
-    var line = rescued === 2 ? 'Uovo in salvo da entrambe le vie!' : rescued ? 'Uovo in salvo! Prova l’altra via' : 'L’uovo sull’isolotto';
-    G.text(line, 246, 175, { size: 23, color: '#d9effb', align: 'left' });
-    c.fillStyle = '#f8cb7c'; G.roundRect(c, 947, 124, 185, 63, 21); c.fill();
-    G.text('Parti  ▶', 1041, 155, { size: 26, color: '#234355' });
-    G.ui.button({ id: 'rescue', ghost: true, x: 120, y: 103, w: 1040, h: 105, r: 30,
+    c.fillStyle = '#173344'; G.roundRect(c, 652, 110, 508, 105, 30); c.fill();
+    c.fillStyle = '#285b60'; G.roundRect(c, 652, 103, 508, 105, 30); c.fill();
+    c.fillStyle = '#f8cb7c'; c.beginPath(); c.arc(711, 155, 36, 0, 7); c.fill();
+    G.officinaEgg(c, 711, 153, 25);
+    G.text('Squadra di soccorso', 767, 137, { size: 31, color: '#fff1bd', align: 'left', maxWidth: 325 });
+    var line = rescued === 2 ? 'Entrambe le vie completate' : rescued ? 'Prova anche l’altra via' : 'L’uovo sull’isolotto';
+    G.text(line, 767, 173, { size: 21, color: '#d9effb', align: 'left' });
+    G.text('▶', 1117, 153, { size: 29, color: '#f8cb7c' });
+    G.ui.button({ id: 'rescue', ghost: true, x: 652, y: 103, w: 508, h: 105, r: 30,
       onTap: function () { G.go('officina', { mi: G.percorsi.RESCUE_ID }); } });
+  }
+
+  function benchCard(c, sv) {
+    c.fillStyle = '#182e48'; G.roundRect(c, 120, 110, 508, 105, 30); c.fill();
+    c.fillStyle = '#2c4e74'; G.roundRect(c, 120, 103, 508, 105, 30); c.fill();
+    c.fillStyle = '#f8cb7c'; c.beginPath(); c.arc(179, 155, 36, 0, 7); c.fill();
+    G.officina.drawPart(c, 'ruote', 'piccole', 179, 155, 65);
+    G.text('Banco di prova', 234, 137, { size: 34, color: '#fff1bd', align: 'left' });
+    G.text(sv.bancoCleared ? 'Fosso superato!' : 'Sposta i pezzi e prova il veicolo', 234, 173, { size: 21, color: '#d9effb', align: 'left' });
+    G.text('▶', 583, 153, { size: 29, color: '#f8cb7c' });
+    G.ui.button({ id: 'banco', ghost: true, x: 120, y: 103, w: 508, h: 105, r: 30, onTap: function () { G.go('banco'); } });
   }
 
   function card(c, m, i, x, y, open, stars) {
@@ -50,7 +58,7 @@
       var g = c.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#4d9eaa'); g.addColorStop(.7, '#b9e2df'); g.addColorStop(.71, '#c8a879'); g.addColorStop(1, '#8e6f4e');
       c.fillStyle = g; c.fillRect(0, 0, W, H);
       G.text('DINO OFFICINA', 640, 55, { size: 62, color: C.cream, stroke: C.leafDeep, strokeWidth: 12 });
-      rescueCard(c, sv);
+      benchCard(c, sv); rescueCard(c, sv);
       G.text((page + 1) + ' · ' + R[page].name, 640, 244, { size: 29, color: C.cream, stroke: C.leafDeep, strokeWidth: 8 });
       var list = R[page].missions, x0 = (W - (4 * CARD.w + 3 * CARD.gap)) / 2;
       list.forEach(function (m, j) {

@@ -224,7 +224,50 @@ for(const level of [1,2]) for(const [track,m] of Object.entries(P.RESCUE_ROUTES)
 }
 G.accounts.login('legacy');assert.equal(G.officinaSave().rescues.rampa,undefined,'the rescue belongs to the active child');G.accounts.login('p-old');
 
+// The bench is a short build → test → adjust loop. It keeps the geometry a child assembled.
+{
+  const original=G.ui.button, buttons=new Map();
+  G.ui.button=o=>buttons.set(o.id,o);
+  try {
+    G.sceneOf('menu').draw(context);
+    assert(buttons.has('banco'),'the prototype opens from the main menu');
+    const bench=G.banco, scene=G.sceneOf('banco');
+    scene.enter();scene.draw(context);
+    const starting=bench.build().wheels.slice();
+    buttons.get('wheel-1').onTap();buttons.get('wheel-0').onTap();
+    buttons.get('wheel-2').onTap();buttons.get('wheel-3').onTap();
+    assert.deepEqual(Array.from(bench.build().wheels),[0,3]);
+    scene.enter();assert.deepEqual(Array.from(bench.build().wheels),[0,3],'mounting points persist for the player');
+    scene.draw(context);buttons.get('bench-try').onTap();
+    assert.equal(bench.state().phase,'drive');
+    for(let f=0;f<60*15&&bench.state().phase==='drive';f++)bench.step(false);
+    assert.equal(bench.state().phase,'win','the outside wheelbase crosses the cut');
+    scene.enter();scene.draw(context);
+    buttons.get('wheel-0').onTap();buttons.get('wheel-1').onTap();
+    buttons.get('wheel-3').onTap();buttons.get('wheel-2').onTap();
+    assert.deepEqual(Array.from(bench.build().wheels),Array.from(starting));
+    bench.start();
+    for(let f=0;f<60*15&&bench.state().phase==='drive';f++)bench.step(false);
+    assert.equal(bench.state().phase,'fail','the inner wheelbase has a different outcome');
+    const attempts=[], rocketResults=[];
+    for(const slot of [0,1]){
+      scene.enter();scene.draw(context);buttons.get('rocket-'+slot).onTap();
+      bench.start();bench.step(true);
+      for(let f=0;f<18;f++)bench.step(false);
+      attempts.push(bench.state().angle);
+      bench.start();
+      for(let f=0;f<60*15&&bench.state().phase==='drive';f++)bench.step(bench.state().x>=540);
+      rocketResults.push(bench.state().phase);
+    }
+    assert(attempts[0]>.06&&attempts[1]<-.03,'the same rocket changes pitch when mounted at a different height');
+    assert.deepEqual(rocketResults,['fail','win'],'changing only the rocket position changes the outcome');
+    G.accounts.login('legacy');scene.enter();
+    assert.equal(bench.build().rocket,null,'the rocket mount stays with the child’s save');
+    G.accounts.login('p-old');
+  } finally { G.ui.button=original; }
+}
+
 // ---- scenes draw
 for(const [name,arg] of [['accesso'],['menu'],['officina',{mi:0}],['officina',{mi:-1}],['strada',{mi:4,v:P.MISSIONS[4].sol}]]){const sc=G.sceneOf(name);if(sc.enter)sc.enter(arg||{});sc.draw(context);}
 R.state().phase='win';G.sceneOf('strada').draw(context);
-console.log('PASS Dino Officina: both rescue routes at both ages, manual pickup, protected cargo, cargo retry and existing missions');
+console.log('PASS Dino Officina: wheel and rocket positions change the bench result, both rescue routes and existing missions');

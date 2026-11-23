@@ -3,6 +3,17 @@
 Monta il tuo veicolo e guidalo. Gioco canvas per tablet, offline, senza
 librerie né risorse esterne.
 
+## Banco di prova
+
+Dal menu scegli **Banco di prova** per provare un montaggio su una pista corta.
+Tocca una ruota e poi un attacco libero. Il veicolo parte da solo quando
+tocchi **Prova il veicolo**. Se monti il razzo, accendilo con il suo pulsante
+o con spazio vicino al cartello. Il montaggio resta salvato al rientro al banco.
+
+Con le ruote larghe il telaio può attraversare il fosso anche senza razzo.
+L’attacco alto e quello basso fanno inclinare il telaio in direzioni opposte
+quando il razzo spinge.
+
 ## Squadra di soccorso
 
 Dal menu scegli **L’uovo sull’isolotto**. La via del fiume si attraversa
