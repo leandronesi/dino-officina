@@ -92,9 +92,11 @@ async function main(){
   await until("G.strada.state().cargo",'The pickup button did not board the egg');
   await touch('touchStart',[{x:548,y:626,id:5}]);
   await shot('rescue-egg-on-boat');
+  await until("(()=>{const s=G.strada.state(),w=G.percorsi.RESCUE_ROUTES.fiume.course.waves[0];return s.afloat && s.y<w.y-32 && s.ang<-.14;})()", 'The boat must pitch up and rise on the first wave during play');
+  await shot('rescue-crest');
   await until("G.strada.state().phase==='win' && G.officinaSave().rescues.fiume===1",'The boat route did not save the egg');
   await touch('touchEnd',[]);
-  console.log('PASS rescue: both routes, Piccolo blueprint, tap to collect, strap held on return and hatching');
+  console.log('PASS rescue: both routes, rescue build, egg pickup, boat rides the wave, cargo protection and hatch');
 
   await call('Emulation.setDeviceMetricsOverride',{width:960,height:600,deviceScaleFactor:2,mobile:true});await run("G.go('officina',{mi:9})");await delay(600);await shot('tablet');
   assert.deepEqual(errors,[],'console errors: '+JSON.stringify(errors).slice(0,800));

@@ -202,6 +202,26 @@ for(const level of [1,2]) for(const [track,m] of Object.entries(P.RESCUE_ROUTES)
   assert(R.state().cargo&&R.state().phase==='drive','the basket keeps the egg after a rough return');
   assert.equal(R.state().strain,0);
 }
+{
+  const m=P.RESCUE_ROUTES.fiume, wave=m.course.waves[0];
+  G.level=1;R.reset(P.RESCUE_ID,m.sol,m.id);
+  let lift=0,noseUp=0,noseDown=0,beforeWave,slowest=Infinity;
+  for(let f=0;f<60*35&&R.state().phase!=='win';f++){
+    const x=R.state().x;
+    R.step({gas:true,secure:true,fire:R.state().phase==='island'});
+    const s=R.state(), speed=60*(s.x-x);
+    if(s.x>=wave.x-115&&s.x<wave.x-90)beforeWave=speed;
+    if(Math.abs(s.x-wave.x)<74){
+      lift=Math.max(lift,wave.y-s.y);
+      noseUp=Math.min(noseUp,s.ang);noseDown=Math.max(noseDown,s.ang);
+      slowest=Math.min(slowest,speed);
+    }
+  }
+  assert(lift>=40,'the loaded boat actually rises over the visible crest');
+  assert(noseUp<-.18&&noseDown>.18,'the bow follows both faces of the wave');
+  assert(beforeWave-slowest>28,'full throttle still loses momentum on the rising face');
+  assert.equal(R.state().phase,'win','the waves remain passable with the propeller');
+}
 G.accounts.login('legacy');assert.equal(G.officinaSave().rescues.rampa,undefined,'the rescue belongs to the active child');G.accounts.login('p-old');
 
 // ---- scenes draw

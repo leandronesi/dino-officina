@@ -1981,7 +1981,9 @@ html, body {
   };
   Object.keys(RESCUE_ROUTES).forEach(function (id) { RESCUE_ROUTES[id].course.fruits = []; });
   var returnWater = RESCUE_ROUTES.fiume.course.waters[1];
-  RESCUE_ROUTES.fiume.course.waves = [160, 360, 565].map(function (offset) { return { x: returnWater.x0 + offset, y: returnWater.level }; });
+  RESCUE_ROUTES.fiume.course.waves = [160, 360, 565].map(function (offset, i) {
+    return { x: returnWater.x0 + offset, y: returnWater.level, width: 74, height: [48, 55, 63][i] };
+  });
 
   function mission(mi, track) {
     if (mi === RESCUE_ID) return track === 'rampa' ? RESCUE_ROUTES.rampa : RESCUE_ROUTES.fiume;
@@ -2249,7 +2251,7 @@ html, body {
     if (mi === P().RESCUE_ID) track = m.id;
     S = { mi: mi, v: v, track: track, phase: 'drive', t: 0, x: 120, y: P().groundAt(cs, 120).y, vx: 0, vy: 0, on: true, ang: 0, rot: 0, got: {}, fruit: 0, fails: 0, failAt: {},
       rt: 0, rcd: 0, spring: 0, maxX: 120, stuckT: 0, hint: null, msgT: 0, timer: 0, prevAct: false, lastFail: null, cruise: false,
-      cargo: false, wobble: 0, wobbleSpeed: 0, assist: false, strain: 0, secured: false, jolt: 0 };
+      cargo: false, wobble: 0, wobbleSpeed: 0, assist: false, strain: 0, secured: false, jolt: 0, afloat: false };
     acc = 0; clearControls();
   }
 
@@ -2280,7 +2282,20 @@ html, body {
     cs.cps.forEach(function (c) { if (c < S.x - 30 && c > cp) cp = c; });
     if (S.cargo) cp = Math.max(cp, cs.pickup);
     S.x = Math.max(120, cp); S.y = P().groundAt(cs, S.x).y; S.vx = 0; S.vy = 0; S.on = true; S.rt = 0; S.rcd = 0; S.spring = 0; S.phase = 'drive';
-    S.maxX = S.x; S.stuckT = 0; S.wobble = 0; S.wobbleSpeed = 0; S.assist = false; S.strain = 0; S.jolt = 0;
+    S.maxX = S.x; S.stuckT = 0; S.wobble = 0; S.wobbleSpeed = 0; S.assist = false; S.strain = 0; S.jolt = 0; S.afloat = false;
+  }
+
+  function waterline(cs, level, x) {
+    var waves = cs.waves;
+    if (!waves) return level;
+    for (var i = 0; i < waves.length; i++) {
+      var wave = waves[i], u = (x - wave.x) / wave.width;
+      if (Math.abs(u) < 1) return level - wave.height * (.5 + .5 * Math.cos(Math.PI * u));
+    }
+    return level;
+  }
+  function waterSlope(cs, level, x) {
+    return (waterline(cs, level, x + 18) - waterline(cs, level, x - 18)) / 36;
   }
 
   function step(inp) {
@@ -2319,19 +2334,25 @@ html, body {
     if (S.rt > 0) { S.rt -= DT; S.on = false; S.vy -= 1900 * DT; S.vx = Math.min(st.speed * 1.6, S.vx + 700 * DT); }
 
     var inWater = w && gr.y > w.level + 2;   // the bed is under water here
-    if (inWater && S.y >= w.level - 1 && S.rt <= 0) {
-      if (!st.floats) { if (S.y > w.level + 6) { fail('water'); return; } }
+    var surfaceY = inWater ? waterline(cs, w.level, S.x) : 0;
+    if (inWater && (S.afloat || S.y >= surfaceY - 1) && S.rt <= 0) {
+      if (!st.floats) { if (S.y > surfaceY + 6) { fail('water'); return; } }
       else {
         // afloat: the propeller pushes, wheels only paddle
         var top = st.speed * st.swim;
         if (inp.gas) S.vx = Math.min(top, S.vx + st.accel * .6 * DT); else S.vx *= Math.pow(.4, DT);
         if (inp.back) S.vx = Math.max(-top * .5, S.vx - st.accel * .5 * DT);
         var current = rescue() ? 75 + 20 * Math.sin(S.t * 2) : 0;
-        S.x += (S.vx - current) * DT; S.y = w.level; S.vy = 0; S.on = true; S.ang *= .9;
+        var slope = waterSlope(cs, w.level, S.x);
+        var drag = G.clamp(-slope * 51, -18, 60);
+        S.x += (S.vx - current - drag) * DT;
+        S.y = waterline(cs, w.level, S.x); S.vy = 0; S.on = true; S.afloat = true;
+        S.ang += (G.clamp(Math.atan(waterSlope(cs, w.level, S.x)), -.49, .49) - S.ang) * (cs.waves ? .18 : .10);
         S.rot += S.vx * DT / st.wheel;
         return after(cs, inp, previousVX, previousX, 0);
       }
     }
+    S.afloat = false;
 
     if (S.on && S.rt <= 0) {
       var ang = Math.atan(gr.slope), uphill = -ang * 180 / Math.PI, ramp = gr.zone === 'ramp', grip = ramp || uphill <= st.climb, a = 0;
@@ -2553,7 +2574,13 @@ html, body {
     // water
     cs.waters.forEach(function (w) {
       if (w.x1 < camX || w.x0 > camX + W) return;
-      c.fillStyle = 'rgba(63,169,214,.78)'; c.fillRect(w.x0 - camX, w.level - camY, w.x1 - w.x0, H);
+      c.fillStyle = 'rgba(63,169,214,.78)';
+      if (cs.waves && cs.waves.some(function (wave) { return wave.x > w.x0 && wave.x < w.x1; })) {
+        c.beginPath(); c.moveTo(w.x0 - camX, w.level - camY);
+        for (var px = w.x0 + 6; px < w.x1; px += 6) c.lineTo(px - camX, waterline(cs, w.level, px) - camY);
+        c.lineTo(w.x1 - camX, w.level - camY); c.lineTo(w.x1 - camX, H); c.lineTo(w.x0 - camX, H);
+        c.closePath(); c.fill();
+      } else c.fillRect(w.x0 - camX, w.level - camY, w.x1 - w.x0, H);
       c.fillStyle = 'rgba(255,255,255,.55)';
       for (k = 0; k < (w.x1 - w.x0) / 60; k++) c.fillRect(w.x0 - camX + k * 60 + (Math.sin(S.t * 2 + k) * 8), w.level - camY + 6 + (k % 2) * 8, 26, 3);
       if (rescue()) {
@@ -2575,14 +2602,17 @@ html, body {
     }
     if (rescue()) {
       if (cs.waves) cs.waves.forEach(function (wave) {
-        var x = wave.x - camX, y = wave.y - camY + 3;
+        var x = wave.x - camX;
         if (x < -85 || x > W + 85) return;
-        var lift = 30 + Math.sin(S.t * 3.5 + wave.x) * 9;
-        c.fillStyle = '#285e86'; c.strokeStyle = '#d7faf2'; c.lineWidth = 5;
-        c.beginPath(); c.moveTo(x - 53, y + 11); c.quadraticCurveTo(x - 7, y + 9, x, y - lift);
-        c.quadraticCurveTo(x + 26, y - lift - 8, x + 27, y + 2);
-        c.quadraticCurveTo(x + 38, y + 10, x + 57, y + 13); c.quadraticCurveTo(x + 20, y + 29, x - 53, y + 11);
-        c.fill(); c.stroke();
+        c.strokeStyle = '#dbfff9'; c.lineWidth = 6; c.beginPath();
+        var start = wave.x - 46, end = wave.x + 43;
+        c.moveTo(start - camX, waterline(cs, wave.y, start) - camY + 2);
+        for (var fx = start + 3; fx <= end; fx += 3) c.lineTo(fx - camX, waterline(cs, wave.y, fx) - camY + 2);
+        c.stroke();
+        c.strokeStyle = 'rgba(209,252,247,.52)'; c.lineWidth = 3; c.beginPath();
+        c.moveTo(x - 13, wave.y - wave.height - camY + 15);
+        c.quadraticCurveTo(x + 13, wave.y - wave.height - camY + 10, x + 44, wave.y - camY - 6);
+        c.stroke();
       });
       cs.obst.forEach(function (o) {
         if (o.k !== 'gap' || o.x1 < camX || o.x0 > camX + W) return;

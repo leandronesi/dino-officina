@@ -98,7 +98,9 @@
   };
   Object.keys(RESCUE_ROUTES).forEach(function (id) { RESCUE_ROUTES[id].course.fruits = []; });
   var returnWater = RESCUE_ROUTES.fiume.course.waters[1];
-  RESCUE_ROUTES.fiume.course.waves = [160, 360, 565].map(function (offset) { return { x: returnWater.x0 + offset, y: returnWater.level }; });
+  RESCUE_ROUTES.fiume.course.waves = [160, 360, 565].map(function (offset, i) {
+    return { x: returnWater.x0 + offset, y: returnWater.level, width: 74, height: [48, 55, 63][i] };
+  });
 
   function mission(mi, track) {
     if (mi === RESCUE_ID) return track === 'rampa' ? RESCUE_ROUTES.rampa : RESCUE_ROUTES.fiume;
