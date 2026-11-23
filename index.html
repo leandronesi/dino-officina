@@ -382,6 +382,8 @@ html, body {
   var uiRects = [];       // registered this frame
   var uiHot = [];         // registered last frame (what the pointer tests against)
   var pressedKey = null;
+  var uiPointer = null;
+  var activePointers = new Set();
   var ui = (G.ui = {});
 
   function rectKey(o) { return o.id || (o.label || '') + '|' + Math.round(o.x) + ',' + Math.round(o.y) + ',' + Math.round(o.w) + ',' + Math.round(o.h); }
@@ -496,7 +498,7 @@ html, body {
     writeSave();
     cur = scenes[fade.next];
     curName = fade.next; G.current = curName;
-    uiRects = []; uiHot = []; pressedKey = null;
+    uiRects = []; uiHot = []; clearPointerInput();
     if (cur && cur.enter) { try { cur.enter(fade.params); } catch (e) { console.error(e); } }
   }
 
@@ -764,20 +766,25 @@ html, body {
   G.overlayOpen = function () { return ovl.classList.contains('on'); };
 
   /* ------------------------------------------------------------ event wiring */
+  function endUIPress() { uiPointer = null; pressedKey = null; gearHold = 0; }
+  function clearPointerInput() { activePointers.clear(); pointer.down = false; endUIPress(); }
   function onDown(e) {
     if (G.overlayOpen()) return;
     G.resumeAudio();
     var p = toLogical(e.clientX, e.clientY);
     p.id = e.pointerId;
-    pointer.x = p.x; pointer.y = p.y; pointer.down = true; pointer.id = e.pointerId;
+    activePointers.add(p.id);
+    pointer.x = p.x; pointer.y = p.y; pointer.down = true; pointer.id = p.id;
     if (fade.dir !== 0) return;
     var hit = hitTest(p);
     if (hit) {
-      if (hit.hold) { gearHold = 0.001; pressedKey = null; return; }
-      pressedKey = hit.key;
+      if (uiPointer === null) {
+        uiPointer = p.id;
+        if (hit.hold) gearHold = .001;
+        else pressedKey = hit.key;
+      }
       return;
     }
-    pressedKey = null;
     if (cur && cur.onDown) cur.onDown(p);
   }
   function onMove(e) {
@@ -785,15 +792,11 @@ html, body {
     var p = toLogical(e.clientX, e.clientY);
     p.id = e.pointerId;
     pointer.x = p.x; pointer.y = p.y;
-    if (!pointer.down) return;
-    if (gearHold > 0) {
-      var g = hitTest(p);
-      if (!g || !g.hold) gearHold = 0;
-      return;
-    }
-    if (pressedKey) {
+    if (!activePointers.has(p.id)) return;
+    if (uiPointer === p.id) {
       var h = hitTest(p);
-      if (!h || h.key !== pressedKey) pressedKey = null;
+      if (gearHold > 0 && (!h || !h.hold)) gearHold = 0;
+      if (pressedKey && (!h || h.key !== pressedKey)) pressedKey = null;
       return;
     }
     if (cur && cur.onMove) cur.onMove(p);
@@ -802,17 +805,16 @@ html, body {
     if (G.overlayOpen()) return;
     var p = toLogical(e.clientX, e.clientY);
     p.id = e.pointerId;
-    pointer.x = p.x; pointer.y = p.y; pointer.down = false;
-    gearHold = 0;
-    if (pressedKey) {
+    activePointers.delete(p.id);
+    pointer.x = p.x; pointer.y = p.y; pointer.down = activePointers.size > 0;
+    if (uiPointer === p.id) {
       var hit = hitTest(p);
-      if (hit && hit.key === pressedKey && hit.onTap) {
+      var key = pressedKey;
+      endUIPress();
+      if (key && hit && hit.key === key && hit.onTap) {
         if (!hit.silent) G.sfx('tap');
-        var f = hit.onTap; pressedKey = null;
-        f();
-        return;
+        hit.onTap();
       }
-      pressedKey = null;
       return;
     }
     if (cur && cur.onUp) cur.onUp(p);
@@ -820,15 +822,21 @@ html, body {
   cv.addEventListener('pointerdown', function (e) { e.preventDefault(); cv.setPointerCapture && cv.setPointerCapture(e.pointerId); onDown(e); });
   cv.addEventListener('pointermove', function (e) { e.preventDefault(); onMove(e); });
   cv.addEventListener('pointerup', function (e) { e.preventDefault(); onUp(e); });
-  cv.addEventListener('pointercancel', function (e) { pointer.down = false; pressedKey = null; gearHold = 0; if(cur&&cur.onCancel)cur.onCancel();else if (cur && cur.onUp) cur.onUp({ x: pointer.x, y: pointer.y, id: e.pointerId }); });
+  cv.addEventListener('pointercancel', function (e) {
+    activePointers.delete(e.pointerId); pointer.down = activePointers.size > 0;
+    if (uiPointer === e.pointerId) { endUIPress(); return; }
+    var p = { x: pointer.x, y: pointer.y, id: e.pointerId };
+    if (cur && cur.onCancel) cur.onCancel(p);
+    else if (cur && cur.onUp) cur.onUp(p);
+  });
   cv.addEventListener('contextmenu', function (e) { e.preventDefault(); });
-  window.addEventListener('blur', function () { pointer.down = false; pressedKey = null; gearHold = 0; });
+  window.addEventListener('blur', clearPointerInput);
 
   /* ------------------------------------------------------------------- loop */
   var last = 0, running = true;
   document.addEventListener('visibilitychange', function () {
     running = !document.hidden;
-    if (!running) { writeSave(); G.hush(); }
+    if (!running) { clearPointerInput(); writeSave(); G.hush(); }
     else { last = 0; G.resumeAudio(); }
   });
   window.addEventListener('pagehide', writeSave);
@@ -848,7 +856,7 @@ html, body {
     if (gearHold > 0 && pointer.down) {
       gearHold = Math.min(1, gearHold + dt / 1.4);
       if (gearHold >= 1) {
-        gearHold = 0; pointer.down = false; G.sfx('chime');
+        clearPointerInput(); G.sfx('chime');
         G.go('gate', { then: 'genitori', back: curName });
       }
     }
@@ -1732,7 +1740,7 @@ html, body {
     telaio: [{ id: 'auto', name: 'Macchina' }, { id: 'barca', name: 'Barca' }],
     ruote: [{ id: 'piccole', name: 'Ruote piccole' }, { id: 'grandi', name: 'Ruote giganti' }, { id: 'cingoli', name: 'Cingoli' }],
     motore: [{ id: 'normale', name: 'Motore' }, { id: 'turbo', name: 'Turbo' }, { id: 'elica', name: 'Elica' }],
-    extra: [{ id: 'niente', name: 'Niente' }, { id: 'razzo', name: 'Razzo' }, { id: 'ali', name: 'Ali' }, { id: 'palloncini', name: 'Palloncini' }, { id: 'molla', name: 'Molla' }]
+    extra: [{ id: 'niente', name: 'Nessuno' }, { id: 'razzo', name: 'Razzo' }, { id: 'ali', name: 'Ali' }, { id: 'palloncini', name: 'Palloncini' }, { id: 'molla', name: 'Molla' }]
   };
   var WHEEL_R = { piccole: 19, grandi: 31, cingoli: 22 };
 
@@ -1904,7 +1912,7 @@ html, body {
         y += h; obst.push({ k: 'gap', x0: x0, x1: x });
       }
       else if (k === 'water') {
-        var wl = y, bank = 10, depth = h || 90; waters.push({ x0: x0, x1: x0 + L, level: wl });
+        var wl = y, bank = 10, depth = h || 90; waters.push({ x0: x0, x1: x0 + n * STEP, level: wl });
         for (i = 0; i < n; i++) { var u = i < bank ? smooth(i / bank) : i > n - bank ? smooth((n - i) / bank) : 1; put(wl + depth * u, 'water'); }
         for (var wx = x0 + 120; wx < x - 80; wx += 130) fruits.push({ x: wx, y: wl - 70, abs: true });
         obst.push({ k: 'water', x0: x0, x1: x });
@@ -1946,9 +1954,16 @@ html, body {
   ];
   var MISSIONS = [];
   RACCOLTE.forEach(function (r, ri) { r.missions.forEach(function (m, mi) { m.r = ri; m.n = mi; m.idx = MISSIONS.length; m.course = build(m.segs); MISSIONS.push(m); }); });
-  // free driving: a bit of everything, no stars
-  var FREE = { name: 'Giro libero', r: 4, n: -1, idx: -1, segs: [['flat', 300], ['hills', 800, 26], ['ramp', 0, 80], ['gap', 120], ['flat', 300], ['up', 400, 100], ['down', 400, 100], ['water', 400, 80], ['flat', 300], ['hills', 600, 24], ['finish']] };
-  FREE.course = build(FREE.segs);
+  // Short test tracks, available as soon as the garage opens.
+  var FREE_TRACKS = {
+    colline: { name: 'Colline', r: 0, tip: 'Prova le ruote e i motori.', segs: [['flat', 320], ['hills', 800, 26], ['up', 400, 64], ['down', 400, 64], ['finish']] },
+    acqua: { name: 'Acqua', r: 1, tip: 'Prova la barca e l’elica.', segs: [['flat', 400], ['water', 560, 80], ['flat', 400], ['finish']] },
+    salti: { name: 'Salti', r: 2, tip: 'Prendi la rincorsa e prova il razzo.', segs: [['flat', 600], ['gap', 200, 80], ['flat', 500], ['ramp', 0, 100], ['gap', 192, 60], ['flat', 380], ['finish']] }
+  };
+  Object.keys(FREE_TRACKS).forEach(function (key) { var track = FREE_TRACKS[key]; track.course = build(track.segs); });
+  function freeTrack(key) {
+    return Object.prototype.hasOwnProperty.call(FREE_TRACKS, key) ? FREE_TRACKS[key] : FREE_TRACKS.colline;
+  }
 
   function groundAt(cs, x) {
     var f = x / STEP, i = Math.floor(f);
@@ -1961,14 +1976,14 @@ html, body {
   function waterAt(cs, x) { for (var i = 0; i < cs.waters.length; i++) { var w = cs.waters[i]; if (x >= w.x0 && x <= w.x1) return w; } return null; }
   function obstacleAt(cs, x) { var best = null; cs.obst.forEach(function (o) { if (x >= o.x0 - 260 && x <= o.x1 + 60) best = o; }); return best; }
 
-  G.percorsi = { RACCOLTE: RACCOLTE, MISSIONS: MISSIONS, FREE: FREE, groundAt: groundAt, waterAt: waterAt, obstacleAt: obstacleAt, STEP: STEP };
+  G.percorsi = { RACCOLTE: RACCOLTE, MISSIONS: MISSIONS, FREE: FREE_TRACKS.colline, FREE_TRACKS: FREE_TRACKS, freeTrack: freeTrack, groundAt: groundAt, waterAt: waterAt, obstacleAt: obstacleAt, STEP: STEP };
 })();
 
 
 /* ==================== 30-officina.js ==================== */
 /* The workshop: four rows of pieces on the left, the vehicle on the lift on
    the right, and PROVA.
-   Every mission starts from an empty frame and any piece can go on: the road
+   A new mission starts from an empty frame and any piece can go on: the road
    decides. A wrong piece is not refused here — the vehicle just will not
    climb the hill, float on the river or clear the ravine, and the road says
    why and offers 'Aggiusta'.
@@ -1981,13 +1996,20 @@ html, body {
   var C = G.C, W = G.W, H = G.H;
   var S = {}, CARD = { w: 94, h: 112, gap: 8, x0: 126 }, ROWS = [118, 268, 418, 568];
   var LABEL = { telaio: 'Telaio', ruote: 'Ruote', motore: 'Motore', extra: 'Extra' };
+  var PART_TIP = {
+    auto: 'La macchina va più veloce sulla terra.', barca: 'La barca galleggia sull’acqua.',
+    piccole: 'Le ruote piccole corrono in piano.', grandi: 'Le ruote grandi scalano le salite.', cingoli: 'I cingoli salgono anche sui pendii più ripidi.',
+    normale: 'Il motore va bene per una gita.', turbo: 'Il turbo ti fa andare più veloce.', elica: 'L’elica spinge la barca in acqua.',
+    niente: 'Il veicolo è più semplice, senza extra.', razzo: 'Tocca il razzo per volare sopra gli ostacoli.', ali: 'Le ali ti fanno planare dopo una rampa.',
+    palloncini: 'I palloncini ti fanno scendere piano.', molla: 'Tocca la molla per saltare in alto.'
+  };
 
   G.officinaSave = function () {
     var s = G.save.officina || (G.save.officina = {});
     s.open = s.open || 0; s.stars = s.stars || {}; s.builds = s.builds || {};
     return s;
   };
-  function mission() { return S.mi >= 0 ? G.percorsi.MISSIONS[S.mi] : G.percorsi.FREE; }
+  function mission() { return S.mi >= 0 ? G.percorsi.MISSIONS[S.mi] : G.percorsi.freeTrack(S.track); }
   // the project is a picture to copy, never a lock: any piece can go on, and the road decides
   function matches(slot) { return S.mi >= 0 && G.level === 1 && S.v[slot] === mission().sol[slot]; }
   function complete() { return G.officina.SLOTS.every(function (s) { return !!S.v[s]; }); }
@@ -2008,81 +2030,123 @@ html, body {
   function enter(o) {
     o = o || {};
     var sv = G.officinaSave(), m;
-    S = { mi: o.mi === undefined ? -1 : o.mi, refuse: 0, refuseSlot: null, hint: o.hint || null, snap: {} };
+    S = { mi: o.mi === undefined ? -1 : o.mi, hint: o.hint || null, track: sv.track || 'colline', snap: {}, tip: '', preview: 0 };
     m = mission();
     var prev = sv.builds[S.mi];
-    // every mission starts from an empty frame: building it is the game. 'Aggiusta' keeps what you had.
-    S.v = o.keep && prev ? JSON.parse(JSON.stringify(prev)) : EMPTY();
+    S.v = prev ? Object.assign(EMPTY(), prev) : EMPTY();
+    var current = S;
     if (!G.mute) setTimeout(function () {
-      if (G.current !== 'officina') return;
+      if (G.current !== 'officina' || S !== current || S.tip) return;
       if (S.mi < 0) G.say('Monta quello che vuoi, poi provalo!');
       else if (G.level === 1) G.say('Guarda il progetto e monta i pezzi!');
       else G.say(m.name + '. Guarda cosa c\'è sulla strada e scegli i pezzi.');
     }, 300);
   }
+  function saveBuild() {
+    G.officinaSave().builds[S.mi] = Object.assign({}, S.v);
+    G.saveNow();
+  }
   function choose(slot, id) {
-    S.v[slot] = id; S.snap[slot] = .35; G.sfx('pop');
-    if (complete()) G.say('Pronto! Tocca PROVA.');
+    S.v[slot] = id; S.snap[slot] = .35; S.preview = 0; S.hint = null;
+    S.tip = PART_TIP[id]; saveBuild(); G.sfx('pop');
+    var missing = G.officina.SLOTS.find(function (s) { return !S.v[s]; });
+    G.say(S.tip + (!missing ? ' Puoi provare su strada.' : missing === 'extra' ? ' Scegli un extra, oppure Nessuno.' : ''));
+  }
+  function chooseTrack(key) {
+    S.track = key; S.hint = null; S.tip = '';
+    G.officinaSave().track = key; G.saveNow();
+    G.say(G.percorsi.freeTrack(key).tip);
   }
   function prova() {
-    if (!complete()) { G.sfx('bad'); G.say('Mancano dei pezzi!'); return; }
-    var sv = G.officinaSave(); sv.builds[S.mi] = JSON.parse(JSON.stringify(S.v)); G.saveNow();
-    G.go('strada', { mi: S.mi, v: JSON.parse(JSON.stringify(S.v)) });
+    if (!complete()) {
+      var missing = G.officina.SLOTS.find(function (slot) { return !S.v[slot]; });
+      S.tip = 'Scegli un pezzo nella riga ' + LABEL[missing] + '.';
+      G.sfx('tap'); G.say(S.tip); return;
+    }
+    G.go('strada', { mi: S.mi, v: Object.assign({}, S.v), track: S.track });
   }
 
   function draw(c) {
     var m = mission(), OF = G.officina;
     // the workshop: wall, pegboard, floor
-    var g = c.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#4d9eaa'); g.addColorStop(.62, '#b9e2df'); g.addColorStop(.63, '#c8a879'); g.addColorStop(1, '#8e6f4e');
-    c.fillStyle = g; c.fillRect(0, 0, W, H);
-    c.fillStyle = 'rgba(255,255,255,.12)'; for (var x = 30; x < W; x += 90) c.fillRect(x, 96, 6, 340);
-    c.fillStyle = '#e9d3a8'; G.roundRect(c, 16, 104, 650, 600, 26); c.fill();
-    c.fillStyle = 'rgba(122,74,38,.25)'; for (var px = 40; px < 650; px += 36) for (var py = 124; py < 690; py += 36) { c.beginPath(); c.arc(px, py, 3, 0, 7); c.fill(); }
+    c.fillStyle = '#1c3446'; c.fillRect(0, 0, W, H);
+    c.fillStyle = '#27485b'; G.roundRect(c, 675, 104, 589, 600, 26); c.fill();
+    c.fillStyle = '#365a6d';
+    for (var x = 700; x < 1240; x += 26) c.fillRect(x, 112, 1, 572);
+    for (var y0 = 126; y0 < 698; y0 += 26) c.fillRect(682, y0, 575, 1);
+    c.fillStyle = '#304f60'; G.roundRect(c, 16, 104, 650, 600, 26); c.fill();
     // top bar
-    c.fillStyle = 'rgba(23,63,55,.92)'; c.fillRect(0, 0, W, 96);
+    c.fillStyle = '#122c3a'; c.fillRect(0, 0, W, 96);
     G.ui.button({ id: 'of-map', x: 16, y: 8, w: 200, h: 80, r: 24, color: C.water, label: 'Mappa', fontSize: 30, onTap: function () { G.go('menu'); } });
     G.text(S.mi >= 0 ? (G.percorsi.RACCOLTE[m.r].name + ' · ' + m.name) : 'Officina libera', 640, 48, { size: 34, color: C.sun, maxWidth: 760 });
+    if (OF.SLOTS.some(function (slot) { return !!S.v[slot]; })) {
+      G.ui.button({ id: 'of-clear', x: 1072, y: 16, w: 188, h: 64, r: 20, color: '#39596b', label: 'Smonta tutto', fontSize: 23, onTap: function () {
+        S.v = EMPTY(); S.preview = 0; S.hint = null; S.tip = 'Scegli i pezzi per il prossimo veicolo.'; saveBuild();
+      } });
+    }
     // the rows of pieces
     OF.SLOTS.forEach(function (slot, r) {
-      var y = ROWS[r], ok = matches(slot), blink = !S.v[slot] && Math.sin(G.t * 6) > 0;   // an empty row asks for a piece
-      c.fillStyle = blink ? 'rgba(255,159,67,.45)' : 'rgba(255,255,255,.35)'; G.roundRect(c, 26, y - 8, 630, CARD.h + 16, 20); c.fill();
-      G.text(LABEL[slot], 74, y + CARD.h / 2, { size: 21, color: C.leafDeep, maxWidth: 96 });
+      var y = ROWS[r], ok = matches(slot);
+      c.fillStyle = S.v[slot] ? '#3e6575' : '#234454'; G.roundRect(c, 26, y - 8, 630, CARD.h + 16, 20); c.fill();
+      G.text(LABEL[slot], 74, y + CARD.h / 2, { size: 21, color: C.cream, maxWidth: 96 });
       if (ok) { c.fillStyle = C.leaf; c.beginPath(); c.arc(74, y + 20, 14, 0, 7); c.fill(); c.strokeStyle = '#fff'; c.lineWidth = 4; c.beginPath(); c.moveTo(67, y + 20); c.lineTo(73, y + 26); c.lineTo(82, y + 14); c.stroke(); }
       OF.PARTS[slot].forEach(function (p, i) {
-        var cx = CARD.x0 + i * (CARD.w + CARD.gap), sel = S.v[slot] === p.id, shake = S.refuse > 0 && S.refuseSlot === slot ? Math.sin(G.t * 60) * 4 : 0;
-        c.fillStyle = sel ? '#fff6e0' : 'rgba(255,246,224,.75)'; G.roundRect(c, cx + shake, y, CARD.w, CARD.h, 18); c.fill();
-        if (sel) { c.strokeStyle = C.leaf; c.lineWidth = 6; G.roundRect(c, cx + 3, y + 3, CARD.w - 6, CARD.h - 6, 16); c.stroke(); }
-        OF.drawPart(c, slot, p.id, cx + CARD.w / 2 + shake, y + 46, 62);
+        var cx = CARD.x0 + i * (CARD.w + CARD.gap), sel = S.v[slot] === p.id;
+        c.fillStyle = sel ? '#fff0ad' : '#e4edf1'; G.roundRect(c, cx, y, CARD.w, CARD.h, 18); c.fill();
+        if (sel) { c.strokeStyle = '#f4b646'; c.lineWidth = 5; G.roundRect(c, cx + 3, y + 3, CARD.w - 6, CARD.h - 6, 16); c.stroke(); }
+        OF.drawPart(c, slot, p.id, cx + CARD.w / 2, y + 46, 62);
         G.text(p.name.replace('Ruote ', ''), cx + CARD.w / 2, y + CARD.h - 16, { size: 16, color: C.ink, maxWidth: CARD.w - 8 });
         G.ui.button({ id: 'pc-' + slot + i, ghost: true, x: cx, y: y, w: CARD.w, h: CARD.h, r: 18, onTap: function () { choose(slot, p.id); } });
       });
     });
     // the lift and the vehicle
-    c.fillStyle = '#6e7780'; c.fillRect(760, 560, 340, 22); c.fillRect(920, 582, 20, 40);
+    c.fillStyle = '#152e3e'; G.roundRect(c, 750, 551, 422, 30, 13); c.fill();
+    c.fillStyle = '#f4b646';
+    for (var stripe = 766; stripe < 1154; stripe += 38) c.fillRect(stripe, 560, 18, 9);
     var bounce = 0; OF.SLOTS.forEach(function (s) { if (S.snap[s] > 0) bounce = Math.max(bounce, S.snap[s]); });
-    OF.drawVehicle(c, S.v, 930, 560 - Math.sin(bounce * 9) * 10 * bounce, { s: 1.3, t: G.t, happy: complete() });
+    var active = S.preview > 0;
+    var lift = active ? 56 * Math.sin(Math.PI * S.preview / 1.2) : 0;
+    OF.drawVehicle(c, S.v, 1027 + (active ? (1.2 - S.preview) * 22 : 0), 552 - lift - Math.sin(bounce * 9) * 10 * bounce,
+      { s: 1.43, t: G.t, happy: complete(), boost: active && S.v.extra === 'razzo', spring: active && S.v.extra === 'molla' });
+    if (complete() && (S.v.extra === 'razzo' || S.v.extra === 'molla')) {
+      G.ui.button({ id: 'of-preview', x: 692, y: 440, w: 157, h: 62, r: 18, color: C.plum, label: S.v.extra === 'razzo' ? 'Accendi razzo' : 'Prova molla', fontSize: 20,
+        onTap: function () { S.preview = 1.2; G.sfx(S.v.extra === 'razzo' ? 'whoosh' : 'pop'); } });
+    }
     // Piccolo: the picture to copy. Grande: what waits on the road.
     if (S.mi >= 0 && G.level === 1) {
-      c.fillStyle = '#fff6e0'; G.roundRect(c, 760, 112, 340, 210, 20); c.fill(); c.strokeStyle = '#8a5a32'; c.lineWidth = 8; c.stroke();
+      c.fillStyle = '#fff6e0'; G.roundRect(c, 760, 112, 340, 150, 20); c.fill(); c.strokeStyle = '#8a5a32'; c.lineWidth = 8; c.stroke();
       G.text('Il progetto', 930, 140, { size: 22, color: C.leafDeep });
-      OF.drawVehicle(c, m.sol, 930, 300, { s: .72, t: G.t });
+      OF.drawVehicle(c, m.sol, 930, 249, { s: .65, t: G.t });
     } else if (S.mi >= 0) {
       c.fillStyle = 'rgba(255,246,224,.9)'; G.roundRect(c, 700, 112, 560, 150, 20); c.fill();
       G.text('Sulla strada:', 980, 140, { size: 22, color: C.leafDeep });
       var ks = obstacleKinds(m), x0 = 980 - (ks.length - 1) * 55;
       if (!ks.length) G.text('solo colline: buon viaggio!', 980, 205, { size: 22, color: C.ink });
       ks.forEach(function (k, i) { obstIcon(c, k, x0 + i * 110, 208, 1.05); });
-      if (S.hint) { c.fillStyle = C.tangerine; G.roundRect(c, 700, 270, 560, 54, 18); c.fill(); G.text(G.strada.HINT[S.hint], 980, 297, { size: 21, color: '#fff', maxWidth: 540 }); }
+    } else {
+      G.text('Scegli la pista di prova', 970, 136, { size: 30, color: C.cream });
+      Object.keys(G.percorsi.FREE_TRACKS).forEach(function (key, i) {
+        var track = G.percorsi.FREE_TRACKS[key];
+        G.ui.button({ id: 'track-' + key, x: 710 + i * 172, y: 167, w: 160, h: 75, r: 19,
+          color: track === m ? C.plum : '#3d687b', label: track.name, fontSize: 27, onTap: function () { chooseTrack(key); } });
+      });
+    }
+    var tip = S.hint ? G.strada.HINT[S.hint] : S.tip || (S.mi < 0 ? m.tip : '');
+    if (tip) {
+      c.fillStyle = '#1b3546'; G.roundRect(c, 700, 272, 540, 52, 16); c.fill();
+      G.text(tip, 970, 298, { size: 22, color: C.cream, maxWidth: 511 });
     }
     var ready = complete();
-    G.ui.button({ id: 'prova', x: 800, y: 612, w: 300, h: 96, r: 28, color: ready ? C.leaf : '#b9ada0', label: 'PROVA!', fontSize: 44, onTap: prova });
+    var count = OF.SLOTS.filter(function (s) { return !!S.v[s]; }).length;
+    G.text(count + ' di 4 pezzi montati', 950, 600, { size: 22, color: '#fff6e0', stroke: '#59402f', strokeWidth: 5 });
+    G.ui.button({ id: 'prova', x: 762, y: 617, w: 376, h: 90, r: 28, color: ready ? C.leaf : '#77695e', label: 'Prova su strada', fontSize: 34, onTap: prova });
   }
 
   G.scene('officina', {
     hud: false, back: false, enter: enter, draw: draw,
-    update: function (dt) { S.refuse = Math.max(0, S.refuse - dt); for (var k in S.snap) S.snap[k] = Math.max(0, S.snap[k] - dt); }
+    update: function (dt) { S.preview = Math.max(0, S.preview - dt); for (var k in S.snap) S.snap[k] = Math.max(0, S.snap[k] - dt); }
   });
-  G.officinaShop = { state: function () { return S; }, choose: choose, prova: prova, complete: complete, matches: matches };
+  G.officinaShop = { state: function () { return S; }, choose: choose, chooseTrack: chooseTrack, prova: prova, complete: complete, matches: matches };
 })();
 
 
@@ -2099,7 +2163,7 @@ html, body {
   'use strict';
   var C = G.C, W = G.W, H = G.H, DT = 1 / 60, GRAV = 1400;
   var P = function () { return G.percorsi; }, O = function () { return G.officina; };
-  var S = null, quiet = false, acc = 0, touches = {}, keys = {};
+  var S = null, quiet = false, acc = 0, touches = {}, keys = {}, actPending = false;
 
   var HINT = {
     steep: 'Troppo ripida! Servono ruote più grandi.',
@@ -2111,14 +2175,14 @@ html, body {
 
   function sfx(n) { if (!quiet) G.sfx(n); }
   function say(s) { if (!quiet) G.say(s); }
-  function course() { return S.mi < 0 ? P().FREE.course : P().MISSIONS[S.mi].course; }
-  function mission() { return S.mi < 0 ? P().FREE : P().MISSIONS[S.mi]; }
+  function course() { return mission().course; }
+  function mission() { return S.mi < 0 ? P().freeTrack(S.track) : P().MISSIONS[S.mi]; }
 
-  function reset(mi, v) {
-    var cs = (mi < 0 ? P().FREE : P().MISSIONS[mi]).course;
-    S = { mi: mi, v: v, phase: 'drive', t: 0, x: 120, y: cs.ys[15], vx: 0, vy: 0, on: true, ang: 0, rot: 0, got: {}, fruit: 0, fails: 0, failAt: {},
-      rt: 0, rcd: 0, spring: 0, maxX: 120, stuckT: 0, hint: null, msgT: 0, timer: 0, prevAct: false, lastFail: null };
-    acc = 0; touches = {}; keys = {};
+  function reset(mi, v, track) {
+    var cs = (mi < 0 ? P().freeTrack(track) : P().MISSIONS[mi]).course;
+    S = { mi: mi, v: v, track: track, phase: 'drive', t: 0, x: 120, y: P().groundAt(cs, 120).y, vx: 0, vy: 0, on: true, ang: 0, rot: 0, got: {}, fruit: 0, fails: 0, failAt: {},
+      rt: 0, rcd: 0, spring: 0, maxX: 120, stuckT: 0, hint: null, msgT: 0, timer: 0, prevAct: false, lastFail: null, cruise: false };
+    acc = 0; clearControls();
   }
 
   function fail(kind) {
@@ -2132,7 +2196,7 @@ html, body {
   function respawn() {
     var cs = course(), cp = 0;
     cs.cps.forEach(function (c) { if (c < S.x - 30 && c > cp) cp = c; });
-    S.x = Math.max(120, cp); S.y = P().groundAt(cs, S.x).y; S.vx = 0; S.vy = 0; S.on = true; S.rt = 0; S.phase = 'drive';
+    S.x = Math.max(120, cp); S.y = P().groundAt(cs, S.x).y; S.vx = 0; S.vy = 0; S.on = true; S.rt = 0; S.rcd = 0; S.spring = 0; S.phase = 'drive';
     S.maxX = S.x; S.stuckT = 0;
   }
 
@@ -2141,11 +2205,11 @@ html, body {
     if (S.phase === 'fail') { if ((S.timer -= DT) <= 0) respawn(); return; }
     if (S.phase !== 'drive') return;
     var cs = course(), st = O().stats(S.v), g = GRAV * st.gravity, gr = P().groundAt(cs, S.x), w = P().waterAt(cs, S.x);
-    var actEdge = inp.act && !S.prevAct; S.prevAct = !!inp.act;
+    var actEdge = inp.fire || (inp.act && !S.prevAct); S.prevAct = !!inp.act;
     S.rcd = Math.max(0, S.rcd - DT); S.spring = Math.max(0, S.spring - DT);
 
     // buttons: rocket and spring
-    if (actEdge && st.rocket && S.rcd <= 0) { S.rt = 1.1; S.rcd = 2.6; sfx('whoosh'); }
+    if (actEdge && st.rocket && S.rcd <= 0) { S.rt = 1.1; S.rcd = 2.6; S.vy = Math.min(-100, S.vy); sfx('whoosh'); }
     if (actEdge && st.spring && S.on) { S.vy = -720; S.on = false; S.spring = .3; sfx('pop'); }
     if (S.rt > 0) { S.rt -= DT; S.on = false; S.vy -= 1900 * DT; S.vx = Math.min(st.speed * 1.6, S.vx + 700 * DT); }
 
@@ -2187,7 +2251,7 @@ html, body {
       if (inp.gas) S.vx = Math.min(Math.max(S.vx, 0) + 120 * DT, Math.max(S.vx, st.speed));
       var ax = S.x + S.vx * DT, ay = S.y + S.vy * DT, ga = P().groundAt(cs, ax), here = P().groundAt(cs, S.x);
       if (ga.zone !== 'gap' && ay >= ga.y) {
-        if (here.zone !== 'gap' && here.y - ga.y > 26 && S.y > ga.y - 2) { S.vx = 0; S.x = S.x; S.y = ay; }   // hit the face of a wall
+        if (here.zone !== 'gap' && here.y - ga.y > 26 && S.y > ga.y - 2) { S.vx = 0; S.y = ay; }   // hit the face of a wall
         else if (here.zone === 'gap' && S.y > ga.y + 20) { S.vx = 0; S.y = ay; }                            // under the far rim of a ravine
         else { S.x = ax; S.y = ga.y; S.on = true; S.vy = S.vx * ga.slope; if (!quiet && Math.abs(S.vy) < 600) sfx('tap'); }
       } else { S.x = ax; S.y = ay; }
@@ -2198,6 +2262,7 @@ html, body {
     after(cs, inp);
   }
   function after(cs, inp) {
+    if (S.x < 0) { S.x = 0; S.vx = Math.max(0, S.vx); }
     // fruit
     cs.fruits.forEach(function (f, i) { if (!S.got[i] && Math.hypot(f.x - S.x, f.y - (S.y - 50)) < 62) { S.got[i] = 1; S.fruit++; sfx('coin'); } });
     // stuck on a hill: offer to fix the vehicle instead of letting the child push forever
@@ -2287,12 +2352,12 @@ html, body {
       var n = S.mi >= 0 ? stars() : 0;
       for (var s2 = 0; s2 < 3 && S.mi >= 0; s2++) A.star(c, 560 + s2 * 80, 330, 30, s2 < n ? C.sun : '#d8cdb8');
       var last = S.mi === P().MISSIONS.length - 1 || S.mi < 0;
-      G.ui.button({ id: 'w-again', x: 290, y: 420, w: 220, h: 110, color: C.water, label: 'Riprova', onTap: function () { reset(S.mi, S.v); } });
+      G.ui.button({ id: 'w-again', x: 290, y: 420, w: 220, h: 110, color: C.water, label: 'Riprova', onTap: function () { reset(S.mi, S.v, S.track); } });
       if (!last) G.ui.button({ id: 'w-next', x: 530, y: 420, w: 220, h: 110, color: C.leaf, label: 'Avanti', onTap: function () { G.go('officina', { mi: S.mi + 1 }); } });
-      G.ui.button({ id: 'w-map', x: last ? 530 : 770, y: 420, w: 220, h: 110, color: C.tangerine, label: 'Mappa', onTap: function () { G.go('menu'); } });
+      G.ui.button({ id: 'w-map', x: last ? 530 : 770, y: 420, w: 220, h: 110, color: C.tangerine, label: S.mi < 0 ? 'Officina' : 'Mappa', onTap: function () { if (S.mi < 0) G.go('officina', { mi: -1 }); else G.go('menu'); } });
     }
   }
-  var PAD = { back: { x: 26, y: 560, w: 150, h: 140 }, gas: { x: 1086, y: 470, w: 170, h: 230 }, act: { cx: 920, cy: 620, r: 74 } };
+  var PAD = { back: { x: 26, y: 560, w: 150, h: 140 }, gas: { x: 1086, y: 470, w: 170, h: 230 }, act: { cx: 306, cy: 612, r: 86 } };
   function pads(c, st) {
     var inp = inputs();
     function box(b, on, col, dir) {
@@ -2304,8 +2369,17 @@ html, body {
     box(PAD.gas, inp.gas, 'rgba(99,199,119,.9)', 1);
     if (st.rocket || st.spring) {
       var a = PAD.act, ready = st.rocket ? S.rcd <= 0 : S.on;
-      c.fillStyle = ready ? 'rgba(232,83,107,.9)' : 'rgba(180,170,160,.7)'; c.beginPath(); c.arc(a.cx, a.cy, a.r, 0, 7); c.fill();
-      O().drawPart(c, 'extra', st.rocket ? 'razzo' : 'molla', a.cx, a.cy, 70);
+      var near = ready && course().obst.some(function (o) {
+        return (o.k === 'gap' || o.k === 'wall') && o.x0 - S.x >= -20 && o.x0 - S.x <= 95;
+      });
+      c.fillStyle = ready ? '#fff1dc' : '#d6ccc1'; c.beginPath(); c.arc(a.cx, a.cy, a.r, 0, 7); c.fill();
+      c.strokeStyle = near ? C.sun : ready ? C.berry : '#93887c'; c.lineWidth = near ? 12 : 5; c.stroke();
+      if (st.rocket && !ready) {
+        c.strokeStyle = C.berry; c.lineWidth = 9; c.beginPath();
+        c.arc(a.cx, a.cy, a.r, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * (1 - S.rcd / 2.6)); c.stroke();
+      }
+      O().drawPart(c, 'extra', st.rocket ? 'razzo' : 'molla', a.cx, a.cy - 20, 84);
+      G.text(ready ? st.rocket ? 'RAZZO' : 'MOLLA' : st.rocket ? 'RICARICA' : 'IN VOLO', a.cx, a.cy + 41, { size: 22, color: C.ink });
     }
   }
   function hud(c, cs) {
@@ -2314,16 +2388,26 @@ html, body {
     c.fillStyle = 'rgba(255,246,224,.25)'; G.roundRect(c, 400, 40, 420, 18, 9); c.fill();
     c.fillStyle = C.sun; G.roundRect(c, 400, 40, 420 * G.clamp(S.x / cs.finish, 0, 1), 18, 9); c.fill();
     G.text(mission().name, 925, 49, { size: 24, color: C.cream, maxWidth: 190 });
-    G.ui.button({ id: 'to-shop', x: 16, y: 8, w: 220, h: 84, r: 24, color: C.tangerine, label: 'Officina', fontSize: 30, onTap: function () { G.go('officina', { mi: S.mi, keep: true }); } });
+    G.ui.button({ id: 'to-shop', x: 16, y: 8, w: 220, h: 84, r: 24, color: C.tangerine, label: 'Officina', fontSize: 30, onTap: function () { G.go('officina', { mi: S.mi }); } });
     G.ui.button({ id: 'to-map', x: 1048, y: 8, w: 216, h: 84, r: 24, color: C.water, label: 'Mappa', fontSize: 30, onTap: function () { G.go('menu'); } });
+    if (S.phase !== 'win') {
+      G.ui.button({ id: 'cruise', x: 1048, y: 104, w: 216, h: 64, r: 20, color: S.cruise ? C.berry : C.leafDeep,
+        label: S.cruise ? 'Ferma il gas' : 'Gas automatico', fontSize: 23, onTap: function () { S.cruise = !S.cruise; } });
+    }
     if (S.msgT > 0 && S.hint && S.phase !== 'win') {
       c.fillStyle = 'rgba(23,63,55,.9)'; G.roundRect(c, 250, 104, 780, 120, 26); c.fill();
       G.text(HINT[S.hint], 640, 138, { size: 27, color: C.cream, maxWidth: 740 });
-      G.ui.button({ id: 'fix', x: 520, y: 160, w: 240, h: 56, r: 20, color: C.tangerine, label: 'Aggiusta', fontSize: 26, onTap: function () { G.go('officina', { mi: S.mi, keep: true, hint: S.hint }); } });
+      G.ui.button({ id: 'fix', x: 520, y: 160, w: 240, h: 56, r: 20, color: C.tangerine, label: 'Aggiusta', fontSize: 26, onTap: function () { G.go('officina', { mi: S.mi, hint: S.hint }); } });
     }
   }
 
-  function inputs() { var o = { gas: !!keys.gas, back: !!keys.back, act: !!keys.act }; for (var id in touches) o[touches[id]] = true; return o; }
+  function inputs() {
+    var o = { gas: !!keys.gas, back: !!keys.back, act: !!keys.act };
+    for (var id in touches) o[touches[id]] = true;
+    o.gas = !o.back && (o.gas || S.cruise);
+    return o;
+  }
+  function clearControls() { touches = {}; keys = {}; actPending = false; if (S) S.cruise = false; }
   function ctrlAt(p) {
     function inR(b) { return p.x >= b.x - 12 && p.x <= b.x + b.w + 12 && p.y >= b.y - 12 && p.y <= b.y + b.h + 12; }
     if (inR(PAD.gas)) return 'gas';
@@ -2336,19 +2420,46 @@ html, body {
 
   G.scene('strada', {
     hud: false, back: false,
-    enter: function (o) { reset(o.mi, o.v); camX = S.x - 380; camY = S.y - 470; say('Tieni premuto il pedale verde!'); },
-    update: function (dt) { acc += dt; var n = 0; while (acc >= DT && n < 4) { step(inputs()); acc -= DT; n++; } if (n === 4) acc = 0; },
+    enter: function (o) {
+      reset(o.mi, o.v, o.track); camX = S.x - 380; camY = S.y - 470;
+      var st = O().stats(o.v);
+      say(st.rocket ? 'Tieni premuto il pedale verde. Quando il razzo si illumina, toccalo!' :
+        st.spring ? 'Tieni premuto il pedale verde. Tocca la molla per saltare!' : 'Tieni premuto il pedale verde!');
+    },
+    update: function (dt) {
+      acc += dt; var n = 0;
+      while (acc >= DT && n < 4) {
+        var inp = inputs(); inp.fire = actPending; actPending = false;
+        if (inp.back) S.cruise = false;
+        step(inp); acc -= DT; n++;
+      }
+      if (n === 4) acc = 0;
+    },
     draw: draw,
-    onDown: function (p) { var k = ctrlAt(p); if (k) touches[p.id] = k; },
-    onMove: function (p) { if (touches[p.id] === 'gas' || touches[p.id] === 'back') { var k = ctrlAt(p); if (k === 'gas' || k === 'back') touches[p.id] = k; } },
+    onDown: function (p) { var k = ctrlAt(p); if (k) touches[p.id] = k; if (k === 'act') actPending = true; },
+    onMove: function (p) {
+      var prev = touches[p.id];
+      if (!prev) return;
+      var k = ctrlAt(p);
+      if (!k || k === prev) return;
+      touches[p.id] = k;
+      if (k === 'act') actPending = true;
+    },
     onUp: function (p) { delete touches[p.id]; },
-    onCancel: function () { touches = {}; },
-    exit: function () { touches = {}; keys = {}; }
+    onCancel: function (p) { delete touches[p.id]; },
+    exit: clearControls
   });
   var KEY = { ArrowRight: 'gas', d: 'gas', D: 'gas', ArrowLeft: 'back', a: 'back', A: 'back', ' ': 'act', ArrowUp: 'act', w: 'act', W: 'act' };
-  window.addEventListener('keydown', function (e) { if (G.current !== 'strada') return; var k = KEY[e.key]; if (k) { e.preventDefault(); keys[k] = true; } });
+  window.addEventListener('keydown', function (e) {
+    if (G.current !== 'strada') return;
+    var k = KEY[e.key]; if (!k) return;
+    e.preventDefault();
+    if (k === 'act' && !keys.act && !e.repeat) actPending = true;
+    keys[k] = true;
+  });
   window.addEventListener('keyup', function (e) { var k = KEY[e.key]; if (k) keys[k] = false; });
-  window.addEventListener('blur', function () { keys = {}; touches = {}; });
+  window.addEventListener('blur', clearControls);
+  document.addEventListener('visibilitychange', function () { if (document.hidden) clearControls(); });
 
   G.strada = { reset: reset, step: step, state: function () { return S; }, quiet: function (q) { quiet = q; }, HINT: HINT, snap: function () { return JSON.stringify(S); }, load: function (s) { S = JSON.parse(s); } };
 })();

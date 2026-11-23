@@ -13,20 +13,24 @@ pezzo cambia davvero come va il veicolo:
 | Telaio | macchina (veloce) · barca (galleggia) |
 | Ruote | piccole (veloci, salgono poco) · giganti (salgono le colline) · cingoli (salgono tutto, lenti) |
 | Motore | motore · turbo (più veloce, un po' più presa) · elica (spinge in acqua) |
-| Extra | niente · razzo (tasto: spinta) · ali (planano) · palloncini (leggero) · molla (tasto: salto) |
+| Extra | nessuno · razzo (tasto: spinta) · ali (planano) · palloncini (leggero) · molla (tasto: salto) |
 
 **Sulla strada** lo si guida, visto di lato: pedale verde a destra (o tutta
-la metà destra dello schermo), freno a sinistra, tasto rosso per razzo e
-molla. Colline, salite ripide, fiumi, burroni e muri: ognuno chiede il pezzo
-giusto. Chi cade in acqua o nel burrone riparte appena prima, con un
+la metà destra dello schermo), freno a sinistra e pulsante per razzo e
+molla vicino al pollice sinistro. Il bordo si illumina vicino agli ostacoli.
+Il **Gas automatico** permette di giocare con un dito. Il freno lo spegne.
+Colline, salite ripide, fiumi, burroni e muri chiedono pezzi diversi.
+Chi cade in acqua o nel burrone riparte appena prima, con un
 consiglio; chi resta bloccato su una salita vede **Aggiusta**, che riporta in
 officina. È il ciclo **monto → provo → aggiusto**.
 
 **Venti missioni** in cinque raccolte (Prime gite, Acqua, Cielo, Montagna,
 Gran tour) che si aprono una dopo l'altra, stelle in base ai frutti raccolti,
-e l'**Officina libera** per costruire quello che si vuole e fare un giro.
+e l'**Officina libera** con tre piste di prova subito disponibili: Colline,
+Acqua e Salti. Razzo e molla si possono accendere direttamente sul banco.
 
-Ogni missione parte da un **telaio vuoto**, e qualsiasi pezzo si può montare:
+Ogni nuova missione parte da un **telaio vuoto**. Il montaggio si salva pezzo
+per pezzo e si può ricominciare con **Smonta tutto**. Qualsiasi pezzo si può montare:
 **decide la strada**. Con il pezzo sbagliato il veicolo non sale, affonda o
 cade, e la strada dice perché.
 

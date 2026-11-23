@@ -10,7 +10,7 @@
   'use strict';
   var C = G.C, W = G.W, H = G.H, DT = 1 / 60, GRAV = 1400;
   var P = function () { return G.percorsi; }, O = function () { return G.officina; };
-  var S = null, quiet = false, acc = 0, touches = {}, keys = {};
+  var S = null, quiet = false, acc = 0, touches = {}, keys = {}, actPending = false;
 
   var HINT = {
     steep: 'Troppo ripida! Servono ruote più grandi.',
@@ -22,14 +22,14 @@
 
   function sfx(n) { if (!quiet) G.sfx(n); }
   function say(s) { if (!quiet) G.say(s); }
-  function course() { return S.mi < 0 ? P().FREE.course : P().MISSIONS[S.mi].course; }
-  function mission() { return S.mi < 0 ? P().FREE : P().MISSIONS[S.mi]; }
+  function course() { return mission().course; }
+  function mission() { return S.mi < 0 ? P().freeTrack(S.track) : P().MISSIONS[S.mi]; }
 
-  function reset(mi, v) {
-    var cs = (mi < 0 ? P().FREE : P().MISSIONS[mi]).course;
-    S = { mi: mi, v: v, phase: 'drive', t: 0, x: 120, y: cs.ys[15], vx: 0, vy: 0, on: true, ang: 0, rot: 0, got: {}, fruit: 0, fails: 0, failAt: {},
-      rt: 0, rcd: 0, spring: 0, maxX: 120, stuckT: 0, hint: null, msgT: 0, timer: 0, prevAct: false, lastFail: null };
-    acc = 0; touches = {}; keys = {};
+  function reset(mi, v, track) {
+    var cs = (mi < 0 ? P().freeTrack(track) : P().MISSIONS[mi]).course;
+    S = { mi: mi, v: v, track: track, phase: 'drive', t: 0, x: 120, y: P().groundAt(cs, 120).y, vx: 0, vy: 0, on: true, ang: 0, rot: 0, got: {}, fruit: 0, fails: 0, failAt: {},
+      rt: 0, rcd: 0, spring: 0, maxX: 120, stuckT: 0, hint: null, msgT: 0, timer: 0, prevAct: false, lastFail: null, cruise: false };
+    acc = 0; clearControls();
   }
 
   function fail(kind) {
@@ -43,7 +43,7 @@
   function respawn() {
     var cs = course(), cp = 0;
     cs.cps.forEach(function (c) { if (c < S.x - 30 && c > cp) cp = c; });
-    S.x = Math.max(120, cp); S.y = P().groundAt(cs, S.x).y; S.vx = 0; S.vy = 0; S.on = true; S.rt = 0; S.phase = 'drive';
+    S.x = Math.max(120, cp); S.y = P().groundAt(cs, S.x).y; S.vx = 0; S.vy = 0; S.on = true; S.rt = 0; S.rcd = 0; S.spring = 0; S.phase = 'drive';
     S.maxX = S.x; S.stuckT = 0;
   }
 
@@ -52,11 +52,11 @@
     if (S.phase === 'fail') { if ((S.timer -= DT) <= 0) respawn(); return; }
     if (S.phase !== 'drive') return;
     var cs = course(), st = O().stats(S.v), g = GRAV * st.gravity, gr = P().groundAt(cs, S.x), w = P().waterAt(cs, S.x);
-    var actEdge = inp.act && !S.prevAct; S.prevAct = !!inp.act;
+    var actEdge = inp.fire || (inp.act && !S.prevAct); S.prevAct = !!inp.act;
     S.rcd = Math.max(0, S.rcd - DT); S.spring = Math.max(0, S.spring - DT);
 
     // buttons: rocket and spring
-    if (actEdge && st.rocket && S.rcd <= 0) { S.rt = 1.1; S.rcd = 2.6; sfx('whoosh'); }
+    if (actEdge && st.rocket && S.rcd <= 0) { S.rt = 1.1; S.rcd = 2.6; S.vy = Math.min(-100, S.vy); sfx('whoosh'); }
     if (actEdge && st.spring && S.on) { S.vy = -720; S.on = false; S.spring = .3; sfx('pop'); }
     if (S.rt > 0) { S.rt -= DT; S.on = false; S.vy -= 1900 * DT; S.vx = Math.min(st.speed * 1.6, S.vx + 700 * DT); }
 
@@ -98,7 +98,7 @@
       if (inp.gas) S.vx = Math.min(Math.max(S.vx, 0) + 120 * DT, Math.max(S.vx, st.speed));
       var ax = S.x + S.vx * DT, ay = S.y + S.vy * DT, ga = P().groundAt(cs, ax), here = P().groundAt(cs, S.x);
       if (ga.zone !== 'gap' && ay >= ga.y) {
-        if (here.zone !== 'gap' && here.y - ga.y > 26 && S.y > ga.y - 2) { S.vx = 0; S.x = S.x; S.y = ay; }   // hit the face of a wall
+        if (here.zone !== 'gap' && here.y - ga.y > 26 && S.y > ga.y - 2) { S.vx = 0; S.y = ay; }   // hit the face of a wall
         else if (here.zone === 'gap' && S.y > ga.y + 20) { S.vx = 0; S.y = ay; }                            // under the far rim of a ravine
         else { S.x = ax; S.y = ga.y; S.on = true; S.vy = S.vx * ga.slope; if (!quiet && Math.abs(S.vy) < 600) sfx('tap'); }
       } else { S.x = ax; S.y = ay; }
@@ -109,6 +109,7 @@
     after(cs, inp);
   }
   function after(cs, inp) {
+    if (S.x < 0) { S.x = 0; S.vx = Math.max(0, S.vx); }
     // fruit
     cs.fruits.forEach(function (f, i) { if (!S.got[i] && Math.hypot(f.x - S.x, f.y - (S.y - 50)) < 62) { S.got[i] = 1; S.fruit++; sfx('coin'); } });
     // stuck on a hill: offer to fix the vehicle instead of letting the child push forever
@@ -198,12 +199,12 @@
       var n = S.mi >= 0 ? stars() : 0;
       for (var s2 = 0; s2 < 3 && S.mi >= 0; s2++) A.star(c, 560 + s2 * 80, 330, 30, s2 < n ? C.sun : '#d8cdb8');
       var last = S.mi === P().MISSIONS.length - 1 || S.mi < 0;
-      G.ui.button({ id: 'w-again', x: 290, y: 420, w: 220, h: 110, color: C.water, label: 'Riprova', onTap: function () { reset(S.mi, S.v); } });
+      G.ui.button({ id: 'w-again', x: 290, y: 420, w: 220, h: 110, color: C.water, label: 'Riprova', onTap: function () { reset(S.mi, S.v, S.track); } });
       if (!last) G.ui.button({ id: 'w-next', x: 530, y: 420, w: 220, h: 110, color: C.leaf, label: 'Avanti', onTap: function () { G.go('officina', { mi: S.mi + 1 }); } });
-      G.ui.button({ id: 'w-map', x: last ? 530 : 770, y: 420, w: 220, h: 110, color: C.tangerine, label: 'Mappa', onTap: function () { G.go('menu'); } });
+      G.ui.button({ id: 'w-map', x: last ? 530 : 770, y: 420, w: 220, h: 110, color: C.tangerine, label: S.mi < 0 ? 'Officina' : 'Mappa', onTap: function () { if (S.mi < 0) G.go('officina', { mi: -1 }); else G.go('menu'); } });
     }
   }
-  var PAD = { back: { x: 26, y: 560, w: 150, h: 140 }, gas: { x: 1086, y: 470, w: 170, h: 230 }, act: { cx: 920, cy: 620, r: 74 } };
+  var PAD = { back: { x: 26, y: 560, w: 150, h: 140 }, gas: { x: 1086, y: 470, w: 170, h: 230 }, act: { cx: 306, cy: 612, r: 86 } };
   function pads(c, st) {
     var inp = inputs();
     function box(b, on, col, dir) {
@@ -215,8 +216,17 @@
     box(PAD.gas, inp.gas, 'rgba(99,199,119,.9)', 1);
     if (st.rocket || st.spring) {
       var a = PAD.act, ready = st.rocket ? S.rcd <= 0 : S.on;
-      c.fillStyle = ready ? 'rgba(232,83,107,.9)' : 'rgba(180,170,160,.7)'; c.beginPath(); c.arc(a.cx, a.cy, a.r, 0, 7); c.fill();
-      O().drawPart(c, 'extra', st.rocket ? 'razzo' : 'molla', a.cx, a.cy, 70);
+      var near = ready && course().obst.some(function (o) {
+        return (o.k === 'gap' || o.k === 'wall') && o.x0 - S.x >= -20 && o.x0 - S.x <= 95;
+      });
+      c.fillStyle = ready ? '#fff1dc' : '#d6ccc1'; c.beginPath(); c.arc(a.cx, a.cy, a.r, 0, 7); c.fill();
+      c.strokeStyle = near ? C.sun : ready ? C.berry : '#93887c'; c.lineWidth = near ? 12 : 5; c.stroke();
+      if (st.rocket && !ready) {
+        c.strokeStyle = C.berry; c.lineWidth = 9; c.beginPath();
+        c.arc(a.cx, a.cy, a.r, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * (1 - S.rcd / 2.6)); c.stroke();
+      }
+      O().drawPart(c, 'extra', st.rocket ? 'razzo' : 'molla', a.cx, a.cy - 20, 84);
+      G.text(ready ? st.rocket ? 'RAZZO' : 'MOLLA' : st.rocket ? 'RICARICA' : 'IN VOLO', a.cx, a.cy + 41, { size: 22, color: C.ink });
     }
   }
   function hud(c, cs) {
@@ -225,16 +235,26 @@
     c.fillStyle = 'rgba(255,246,224,.25)'; G.roundRect(c, 400, 40, 420, 18, 9); c.fill();
     c.fillStyle = C.sun; G.roundRect(c, 400, 40, 420 * G.clamp(S.x / cs.finish, 0, 1), 18, 9); c.fill();
     G.text(mission().name, 925, 49, { size: 24, color: C.cream, maxWidth: 190 });
-    G.ui.button({ id: 'to-shop', x: 16, y: 8, w: 220, h: 84, r: 24, color: C.tangerine, label: 'Officina', fontSize: 30, onTap: function () { G.go('officina', { mi: S.mi, keep: true }); } });
+    G.ui.button({ id: 'to-shop', x: 16, y: 8, w: 220, h: 84, r: 24, color: C.tangerine, label: 'Officina', fontSize: 30, onTap: function () { G.go('officina', { mi: S.mi }); } });
     G.ui.button({ id: 'to-map', x: 1048, y: 8, w: 216, h: 84, r: 24, color: C.water, label: 'Mappa', fontSize: 30, onTap: function () { G.go('menu'); } });
+    if (S.phase !== 'win') {
+      G.ui.button({ id: 'cruise', x: 1048, y: 104, w: 216, h: 64, r: 20, color: S.cruise ? C.berry : C.leafDeep,
+        label: S.cruise ? 'Ferma il gas' : 'Gas automatico', fontSize: 23, onTap: function () { S.cruise = !S.cruise; } });
+    }
     if (S.msgT > 0 && S.hint && S.phase !== 'win') {
       c.fillStyle = 'rgba(23,63,55,.9)'; G.roundRect(c, 250, 104, 780, 120, 26); c.fill();
       G.text(HINT[S.hint], 640, 138, { size: 27, color: C.cream, maxWidth: 740 });
-      G.ui.button({ id: 'fix', x: 520, y: 160, w: 240, h: 56, r: 20, color: C.tangerine, label: 'Aggiusta', fontSize: 26, onTap: function () { G.go('officina', { mi: S.mi, keep: true, hint: S.hint }); } });
+      G.ui.button({ id: 'fix', x: 520, y: 160, w: 240, h: 56, r: 20, color: C.tangerine, label: 'Aggiusta', fontSize: 26, onTap: function () { G.go('officina', { mi: S.mi, hint: S.hint }); } });
     }
   }
 
-  function inputs() { var o = { gas: !!keys.gas, back: !!keys.back, act: !!keys.act }; for (var id in touches) o[touches[id]] = true; return o; }
+  function inputs() {
+    var o = { gas: !!keys.gas, back: !!keys.back, act: !!keys.act };
+    for (var id in touches) o[touches[id]] = true;
+    o.gas = !o.back && (o.gas || S.cruise);
+    return o;
+  }
+  function clearControls() { touches = {}; keys = {}; actPending = false; if (S) S.cruise = false; }
   function ctrlAt(p) {
     function inR(b) { return p.x >= b.x - 12 && p.x <= b.x + b.w + 12 && p.y >= b.y - 12 && p.y <= b.y + b.h + 12; }
     if (inR(PAD.gas)) return 'gas';
@@ -247,19 +267,46 @@
 
   G.scene('strada', {
     hud: false, back: false,
-    enter: function (o) { reset(o.mi, o.v); camX = S.x - 380; camY = S.y - 470; say('Tieni premuto il pedale verde!'); },
-    update: function (dt) { acc += dt; var n = 0; while (acc >= DT && n < 4) { step(inputs()); acc -= DT; n++; } if (n === 4) acc = 0; },
+    enter: function (o) {
+      reset(o.mi, o.v, o.track); camX = S.x - 380; camY = S.y - 470;
+      var st = O().stats(o.v);
+      say(st.rocket ? 'Tieni premuto il pedale verde. Quando il razzo si illumina, toccalo!' :
+        st.spring ? 'Tieni premuto il pedale verde. Tocca la molla per saltare!' : 'Tieni premuto il pedale verde!');
+    },
+    update: function (dt) {
+      acc += dt; var n = 0;
+      while (acc >= DT && n < 4) {
+        var inp = inputs(); inp.fire = actPending; actPending = false;
+        if (inp.back) S.cruise = false;
+        step(inp); acc -= DT; n++;
+      }
+      if (n === 4) acc = 0;
+    },
     draw: draw,
-    onDown: function (p) { var k = ctrlAt(p); if (k) touches[p.id] = k; },
-    onMove: function (p) { if (touches[p.id] === 'gas' || touches[p.id] === 'back') { var k = ctrlAt(p); if (k === 'gas' || k === 'back') touches[p.id] = k; } },
+    onDown: function (p) { var k = ctrlAt(p); if (k) touches[p.id] = k; if (k === 'act') actPending = true; },
+    onMove: function (p) {
+      var prev = touches[p.id];
+      if (!prev) return;
+      var k = ctrlAt(p);
+      if (!k || k === prev) return;
+      touches[p.id] = k;
+      if (k === 'act') actPending = true;
+    },
     onUp: function (p) { delete touches[p.id]; },
-    onCancel: function () { touches = {}; },
-    exit: function () { touches = {}; keys = {}; }
+    onCancel: function (p) { delete touches[p.id]; },
+    exit: clearControls
   });
   var KEY = { ArrowRight: 'gas', d: 'gas', D: 'gas', ArrowLeft: 'back', a: 'back', A: 'back', ' ': 'act', ArrowUp: 'act', w: 'act', W: 'act' };
-  window.addEventListener('keydown', function (e) { if (G.current !== 'strada') return; var k = KEY[e.key]; if (k) { e.preventDefault(); keys[k] = true; } });
+  window.addEventListener('keydown', function (e) {
+    if (G.current !== 'strada') return;
+    var k = KEY[e.key]; if (!k) return;
+    e.preventDefault();
+    if (k === 'act' && !keys.act && !e.repeat) actPending = true;
+    keys[k] = true;
+  });
   window.addEventListener('keyup', function (e) { var k = KEY[e.key]; if (k) keys[k] = false; });
-  window.addEventListener('blur', function () { keys = {}; touches = {}; });
+  window.addEventListener('blur', clearControls);
+  document.addEventListener('visibilitychange', function () { if (document.hidden) clearControls(); });
 
   G.strada = { reset: reset, step: step, state: function () { return S; }, quiet: function (q) { quiet = q; }, HINT: HINT, snap: function () { return JSON.stringify(S); }, load: function (s) { S = JSON.parse(s); } };
 })();

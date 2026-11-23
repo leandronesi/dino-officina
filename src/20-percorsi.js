@@ -29,7 +29,7 @@
         y += h; obst.push({ k: 'gap', x0: x0, x1: x });
       }
       else if (k === 'water') {
-        var wl = y, bank = 10, depth = h || 90; waters.push({ x0: x0, x1: x0 + L, level: wl });
+        var wl = y, bank = 10, depth = h || 90; waters.push({ x0: x0, x1: x0 + n * STEP, level: wl });
         for (i = 0; i < n; i++) { var u = i < bank ? smooth(i / bank) : i > n - bank ? smooth((n - i) / bank) : 1; put(wl + depth * u, 'water'); }
         for (var wx = x0 + 120; wx < x - 80; wx += 130) fruits.push({ x: wx, y: wl - 70, abs: true });
         obst.push({ k: 'water', x0: x0, x1: x });
@@ -71,9 +71,16 @@
   ];
   var MISSIONS = [];
   RACCOLTE.forEach(function (r, ri) { r.missions.forEach(function (m, mi) { m.r = ri; m.n = mi; m.idx = MISSIONS.length; m.course = build(m.segs); MISSIONS.push(m); }); });
-  // free driving: a bit of everything, no stars
-  var FREE = { name: 'Giro libero', r: 4, n: -1, idx: -1, segs: [['flat', 300], ['hills', 800, 26], ['ramp', 0, 80], ['gap', 120], ['flat', 300], ['up', 400, 100], ['down', 400, 100], ['water', 400, 80], ['flat', 300], ['hills', 600, 24], ['finish']] };
-  FREE.course = build(FREE.segs);
+  // Short test tracks, available as soon as the garage opens.
+  var FREE_TRACKS = {
+    colline: { name: 'Colline', r: 0, tip: 'Prova le ruote e i motori.', segs: [['flat', 320], ['hills', 800, 26], ['up', 400, 64], ['down', 400, 64], ['finish']] },
+    acqua: { name: 'Acqua', r: 1, tip: 'Prova la barca e l’elica.', segs: [['flat', 400], ['water', 560, 80], ['flat', 400], ['finish']] },
+    salti: { name: 'Salti', r: 2, tip: 'Prendi la rincorsa e prova il razzo.', segs: [['flat', 600], ['gap', 200, 80], ['flat', 500], ['ramp', 0, 100], ['gap', 192, 60], ['flat', 380], ['finish']] }
+  };
+  Object.keys(FREE_TRACKS).forEach(function (key) { var track = FREE_TRACKS[key]; track.course = build(track.segs); });
+  function freeTrack(key) {
+    return Object.prototype.hasOwnProperty.call(FREE_TRACKS, key) ? FREE_TRACKS[key] : FREE_TRACKS.colline;
+  }
 
   function groundAt(cs, x) {
     var f = x / STEP, i = Math.floor(f);
@@ -86,5 +93,5 @@
   function waterAt(cs, x) { for (var i = 0; i < cs.waters.length; i++) { var w = cs.waters[i]; if (x >= w.x0 && x <= w.x1) return w; } return null; }
   function obstacleAt(cs, x) { var best = null; cs.obst.forEach(function (o) { if (x >= o.x0 - 260 && x <= o.x1 + 60) best = o; }); return best; }
 
-  G.percorsi = { RACCOLTE: RACCOLTE, MISSIONS: MISSIONS, FREE: FREE, groundAt: groundAt, waterAt: waterAt, obstacleAt: obstacleAt, STEP: STEP };
+  G.percorsi = { RACCOLTE: RACCOLTE, MISSIONS: MISSIONS, FREE: FREE_TRACKS.colline, FREE_TRACKS: FREE_TRACKS, freeTrack: freeTrack, groundAt: groundAt, waterAt: waterAt, obstacleAt: obstacleAt, STEP: STEP };
 })();

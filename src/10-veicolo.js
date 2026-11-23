@@ -13,7 +13,7 @@
     telaio: [{ id: 'auto', name: 'Macchina' }, { id: 'barca', name: 'Barca' }],
     ruote: [{ id: 'piccole', name: 'Ruote piccole' }, { id: 'grandi', name: 'Ruote giganti' }, { id: 'cingoli', name: 'Cingoli' }],
     motore: [{ id: 'normale', name: 'Motore' }, { id: 'turbo', name: 'Turbo' }, { id: 'elica', name: 'Elica' }],
-    extra: [{ id: 'niente', name: 'Niente' }, { id: 'razzo', name: 'Razzo' }, { id: 'ali', name: 'Ali' }, { id: 'palloncini', name: 'Palloncini' }, { id: 'molla', name: 'Molla' }]
+    extra: [{ id: 'niente', name: 'Nessuno' }, { id: 'razzo', name: 'Razzo' }, { id: 'ali', name: 'Ali' }, { id: 'palloncini', name: 'Palloncini' }, { id: 'molla', name: 'Molla' }]
   };
   var WHEEL_R = { piccole: 19, grandi: 31, cingoli: 22 };
 

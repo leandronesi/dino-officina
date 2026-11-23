@@ -27,7 +27,7 @@ const rules=['20-percorsi.js','40-strada.js'].map(f=>fs.readFileSync(path.join(d
 assert(!/Math\.random|G\.rnd|G\.pick|G\.shuffle/.test(rules),'the road must be deterministic');
 
 function drive(mi,v,secs,o){
-  R.reset(mi,v);const cs=mi<0?P.FREE.course:P.MISSIONS[mi].course,st=O.stats(v);
+  R.reset(mi,v,o?.track);const cs=mi<0?P.freeTrack(o?.track).course:P.MISSIONS[mi].course,st=O.stats(v);
   for(let f=0;f<60*(secs||90);f++){
     const s=R.state();if(s.phase==='win')return {ok:true,fruit:s.fruit,fails:s.fails};
     const ob=cs.obst.find(q=>q.x0>s.x-20&&q.x0-s.x<(st.rocket?60:st.spring?70:0));
@@ -44,10 +44,26 @@ P.MISSIONS.forEach((m,i)=>{
   if(hard)assert(!b.ok,'the plain vehicle must not finish '+m.name);
   console.log(`  ${String(i+1).padEnd(3)}${m.name.padEnd(20)} progetto ok in ${r.fruit} frutti · veicolo base ${b.ok?'arriva':'non arriva'}`);
 });
-assert(drive(-1,BASE).ok===false||true);
+assert(drive(-1,BASE,30,{track:'colline'}).ok);
 
 // ---- every obstacle: the right piece passes, the wrong one fails
 const by=n=>P.MISSIONS.findIndex(m=>m.name===n);
+assert(drive(-1,P.MISSIONS[by('Il laghetto')].sol,30,{track:'acqua'}).ok);
+assert(drive(-1,P.MISSIONS[by('Il burrone')].sol,30,{track:'salti'}).ok);
+{
+  const mi=by('Il burrone'), v=P.MISSIONS[mi].sol, road=G.sceneOf('strada');
+  road.enter({mi,v});
+  road.onDown({id:1,x:1170,y:580});
+  road.onDown({id:2,x:306,y:612});
+  road.onUp({id:2});
+  road.update(1/60);
+  assert(R.state().rt>0,'a quick rocket tap must survive between simulation frames');
+  assert(R.state().vx>0,'accelerating and firing can use two fingers');
+  road.onUp({id:1});
+  R.state().phase='fail';R.state().timer=0;
+  R.step({});
+  assert.equal(R.state().rcd,0,'the rocket is ready after a retry');
+}
 [['La salita ripida',V('auto','grandi','normale','niente'),V('auto','piccole','normale','niente')],
  ['Cingoli in salita',V('auto','cingoli','normale','niente'),V('auto','grandi','turbo','niente')],
  ['Il laghetto',V('barca','piccole','elica','niente'),V('auto','piccole','elica','niente')],
@@ -71,10 +87,24 @@ assert(!shop.complete(),'every mission starts from an empty frame');assert.equal
 shop.choose('telaio','auto');assert.equal(shop.state().v.telaio,'auto','a piece that is not in the picture is NOT refused');assert(!shop.matches('telaio'));
 shop.choose('ruote','piccole');shop.choose('motore','normale');assert(!shop.complete(),'three pieces are not a vehicle');shop.choose('extra','niente');assert(shop.complete());
 shop.choose('telaio','barca');assert(shop.matches('telaio'),'the tick shows which rows match the picture');
+G.sceneOf('officina').enter({mi:by('Il laghetto')});
+assert.equal(shop.state().v.telaio,'barca','reopening a mission restores the saved build');
 // Aggiusta keeps what was built
 shop.prova();G.sceneOf('officina').enter({mi:by('Il laghetto'),keep:true});assert.equal(G.officinaShop.state().v.telaio,'barca','Aggiusta keeps the vehicle');
 // Grande: same freedom, no picture
 G.level=2;G.sceneOf('officina').enter({mi:by('Il laghetto')});G.officinaShop.choose('ruote','cingoli');assert.equal(G.officinaShop.state().v.ruote,'cingoli');
+
+// The free garage remembers the chosen track and opens it with the built vehicle.
+G.sceneOf('officina').enter({mi:-1});
+for(const [slot,id] of Object.entries(P.MISSIONS[by('Il burrone')].sol)) shop.choose(slot,id);
+shop.chooseTrack('salti');
+shop.prova();
+G.sceneOf('officina').enter({mi:-1});
+assert.equal(shop.state().track,'salti');
+assert(shop.complete());
+R.reset(-1,shop.state().v,'salti');
+assert.equal(R.state().track,'salti');
+assert(P.FREE_TRACKS.salti.course.obst.some(o=>o.k==='gap'));
 
 // ---- a win saves the stars and opens the next mission, per child
 delete G.save.officina;R.reset(0,P.MISSIONS[0].sol);for(let f=0;f<60*60&&R.state().phase!=='win';f++)R.step({gas:true});

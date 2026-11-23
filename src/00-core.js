@@ -295,6 +295,8 @@
   var uiRects = [];       // registered this frame
   var uiHot = [];         // registered last frame (what the pointer tests against)
   var pressedKey = null;
+  var uiPointer = null;
+  var activePointers = new Set();
   var ui = (G.ui = {});
 
   function rectKey(o) { return o.id || (o.label || '') + '|' + Math.round(o.x) + ',' + Math.round(o.y) + ',' + Math.round(o.w) + ',' + Math.round(o.h); }
@@ -409,7 +411,7 @@
     writeSave();
     cur = scenes[fade.next];
     curName = fade.next; G.current = curName;
-    uiRects = []; uiHot = []; pressedKey = null;
+    uiRects = []; uiHot = []; clearPointerInput();
     if (cur && cur.enter) { try { cur.enter(fade.params); } catch (e) { console.error(e); } }
   }
 
@@ -677,20 +679,25 @@
   G.overlayOpen = function () { return ovl.classList.contains('on'); };
 
   /* ------------------------------------------------------------ event wiring */
+  function endUIPress() { uiPointer = null; pressedKey = null; gearHold = 0; }
+  function clearPointerInput() { activePointers.clear(); pointer.down = false; endUIPress(); }
   function onDown(e) {
     if (G.overlayOpen()) return;
     G.resumeAudio();
     var p = toLogical(e.clientX, e.clientY);
     p.id = e.pointerId;
-    pointer.x = p.x; pointer.y = p.y; pointer.down = true; pointer.id = e.pointerId;
+    activePointers.add(p.id);
+    pointer.x = p.x; pointer.y = p.y; pointer.down = true; pointer.id = p.id;
     if (fade.dir !== 0) return;
     var hit = hitTest(p);
     if (hit) {
-      if (hit.hold) { gearHold = 0.001; pressedKey = null; return; }
-      pressedKey = hit.key;
+      if (uiPointer === null) {
+        uiPointer = p.id;
+        if (hit.hold) gearHold = .001;
+        else pressedKey = hit.key;
+      }
       return;
     }
-    pressedKey = null;
     if (cur && cur.onDown) cur.onDown(p);
   }
   function onMove(e) {
@@ -698,15 +705,11 @@
     var p = toLogical(e.clientX, e.clientY);
     p.id = e.pointerId;
     pointer.x = p.x; pointer.y = p.y;
-    if (!pointer.down) return;
-    if (gearHold > 0) {
-      var g = hitTest(p);
-      if (!g || !g.hold) gearHold = 0;
-      return;
-    }
-    if (pressedKey) {
+    if (!activePointers.has(p.id)) return;
+    if (uiPointer === p.id) {
       var h = hitTest(p);
-      if (!h || h.key !== pressedKey) pressedKey = null;
+      if (gearHold > 0 && (!h || !h.hold)) gearHold = 0;
+      if (pressedKey && (!h || h.key !== pressedKey)) pressedKey = null;
       return;
     }
     if (cur && cur.onMove) cur.onMove(p);
@@ -715,17 +718,16 @@
     if (G.overlayOpen()) return;
     var p = toLogical(e.clientX, e.clientY);
     p.id = e.pointerId;
-    pointer.x = p.x; pointer.y = p.y; pointer.down = false;
-    gearHold = 0;
-    if (pressedKey) {
+    activePointers.delete(p.id);
+    pointer.x = p.x; pointer.y = p.y; pointer.down = activePointers.size > 0;
+    if (uiPointer === p.id) {
       var hit = hitTest(p);
-      if (hit && hit.key === pressedKey && hit.onTap) {
+      var key = pressedKey;
+      endUIPress();
+      if (key && hit && hit.key === key && hit.onTap) {
         if (!hit.silent) G.sfx('tap');
-        var f = hit.onTap; pressedKey = null;
-        f();
-        return;
+        hit.onTap();
       }
-      pressedKey = null;
       return;
     }
     if (cur && cur.onUp) cur.onUp(p);
@@ -733,15 +735,21 @@
   cv.addEventListener('pointerdown', function (e) { e.preventDefault(); cv.setPointerCapture && cv.setPointerCapture(e.pointerId); onDown(e); });
   cv.addEventListener('pointermove', function (e) { e.preventDefault(); onMove(e); });
   cv.addEventListener('pointerup', function (e) { e.preventDefault(); onUp(e); });
-  cv.addEventListener('pointercancel', function (e) { pointer.down = false; pressedKey = null; gearHold = 0; if(cur&&cur.onCancel)cur.onCancel();else if (cur && cur.onUp) cur.onUp({ x: pointer.x, y: pointer.y, id: e.pointerId }); });
+  cv.addEventListener('pointercancel', function (e) {
+    activePointers.delete(e.pointerId); pointer.down = activePointers.size > 0;
+    if (uiPointer === e.pointerId) { endUIPress(); return; }
+    var p = { x: pointer.x, y: pointer.y, id: e.pointerId };
+    if (cur && cur.onCancel) cur.onCancel(p);
+    else if (cur && cur.onUp) cur.onUp(p);
+  });
   cv.addEventListener('contextmenu', function (e) { e.preventDefault(); });
-  window.addEventListener('blur', function () { pointer.down = false; pressedKey = null; gearHold = 0; });
+  window.addEventListener('blur', clearPointerInput);
 
   /* ------------------------------------------------------------------- loop */
   var last = 0, running = true;
   document.addEventListener('visibilitychange', function () {
     running = !document.hidden;
-    if (!running) { writeSave(); G.hush(); }
+    if (!running) { clearPointerInput(); writeSave(); G.hush(); }
     else { last = 0; G.resumeAudio(); }
   });
   window.addEventListener('pagehide', writeSave);
@@ -761,7 +769,7 @@
     if (gearHold > 0 && pointer.down) {
       gearHold = Math.min(1, gearHold + dt / 1.4);
       if (gearHold >= 1) {
-        gearHold = 0; pointer.down = false; G.sfx('chime');
+        clearPointerInput(); G.sfx('chime');
         G.go('gate', { then: 'genitori', back: curName });
       }
     }
