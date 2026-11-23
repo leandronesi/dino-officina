@@ -63,7 +63,7 @@ async function main(){
   await until("G.banco.state().phase==='fail'",'The inner wheelbase should get stuck');
   await shot('bench-narrow');
   await tapAt(480,455);
-  for(const [x,y] of [[353,477],[213,477],[491,477],[631,477]])await tapAt(x,y);
+  for(const [x,y] of [[353,541],[213,477],[491,541],[631,477]])await tapAt(x,y);
   assert.equal(await run("G.banco.build().wheels.join(',')"),'0,3','Four real taps move both wheels outwards');
   await tapAt(1050,571);
   await until("G.banco.state().phase==='win'",'The wider wheelbase should reach the flag');

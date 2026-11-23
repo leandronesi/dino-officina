@@ -149,7 +149,9 @@
       c.strokeStyle = selected === i ? '#ffda69' : '#aed6e5'; c.lineWidth = selected === i ? 8 : 4;
       c.beginPath(); c.arc(x, y, 44, 0, 7); c.stroke();
       if (!occupied) G.text('+', x, y, { size: 37, color: '#aed6e5' });
-      G.ui.button({ id: 'wheel-' + i, ghost: true, x: x - 51, y: y - 48, w: 102, h: 96, r: 24, onTap: function () { moveWheel(i); } });
+      var hitW = occupied ? 120 : 102, hitH = occupied ? 126 : 96;
+      G.ui.button({ id: 'wheel-' + i, ghost: true, x: x - hitW / 2, y: y - hitH / 2, w: hitW, h: hitH, r: 24,
+        onTap: function () { moveWheel(i); } });
     });
     ROCKET.forEach(function (p, i) {
       var x = bx + p.x * scale, y = by + p.y * scale;
