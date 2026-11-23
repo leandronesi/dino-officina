@@ -158,6 +158,15 @@
         if (G.officinaSave().rescues[key]) A.star(c, x + 234, 174, 13, C.sun);
         G.ui.button({ id: 'rescue-' + key, ghost: true, x: x, y: 145, w: 260, h: 112, r: 18, onTap: function () { chooseTrack(key); } });
       });
+      if (G.level === 1 && OF.SLOTS.some(function (slot) { return !matches(slot); })) {
+        G.ui.button({ id: 'rescue-build', x: 699, y: 357, w: 227, h: 61, r: 18,
+          color: '#356981', label: 'Monta il progetto', fontSize: 22, onTap: function () {
+            S.v = Object.assign({}, m.sol);
+            OF.SLOTS.forEach(function (slot) { S.snap[slot] = .35; });
+            S.hint = null; S.tip = 'Veicolo pronto per il soccorso!';
+            saveBuild(); G.sfx('chime'); G.say(S.tip);
+          } });
+      }
     } else if (S.mi >= 0 && G.level === 1) {
       c.fillStyle = '#fff6e0'; G.roundRect(c, 760, 112, 340, 150, 20); c.fill(); c.strokeStyle = '#8a5a32'; c.lineWidth = 8; c.stroke();
       G.text('Il progetto', 930, 140, { size: 22, color: C.leafDeep });

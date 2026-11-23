@@ -142,9 +142,16 @@ G.accounts.login('legacy');assert.equal(G.save.officina,undefined,'sibling save 
 for(const level of [1,2]) for(const [track,m] of Object.entries(P.RESCUE_ROUTES)){
   G.level=level;
   R.reset(P.RESCUE_ID,m.sol,track);
-  let loaded=false, pickup=false, wobble=0, used=new Set();
+  let loaded=false, pickup=false, stopped=false, wobble=0, used=new Set();
   for(let f=0;f<60*45&&R.state().phase!=='win';f++){
     const s=R.state();
+    if(s.phase==='island'&&!stopped){
+      const x=s.x;
+      for(let i=0;i<90;i++)R.step({gas:true});
+      assert.equal(s.x,x,'gas alone cannot drive past the island');
+      assert(!s.cargo);
+      stopped=true;
+    }
     if(s.phase==='pickup'){
       pickup=true;
       if(level===1) assert(!G.officinaSave().rescues[track],'the egg is not yet at the nest');
@@ -154,12 +161,12 @@ for(const level of [1,2]) for(const [track,m] of Object.entries(P.RESCUE_ROUTES)
     const gap=m.course.obst.find(o=>o.k==='gap'&&o.x0-s.x>=0&&(level===1?s.assist:o.x0-s.x<=85));
     const fire=gap && !used.has(gap.x0);
     if(fire)used.add(gap.x0);
-    R.step({gas:true,fire});
+    R.step({gas:true,fire:fire||s.phase==='island',secure:s.cargo});
   }
   const s=R.state();
   assert.equal(s.phase,'win',track+' at age '+level+' must reach the nest ('+JSON.stringify({x:s.x,cargo:s.cargo,fails:s.failAt})+')');
-  assert(pickup&&loaded,'both the pickup and loaded return must be played');
-  assert(wobble>.02,'the cargo responds to driving');
+  assert(stopped&&pickup&&loaded,'the child loads the egg at the island before driving back');
+  assert(wobble>.008,'the cargo responds to driving even with its strap on');
   assert.equal(s.fails,0);
   assert.equal(G.officinaSave().rescues[track],1);
   assert.equal(G.officinaSave().open,1,'the rescue is independent of the original map');
@@ -172,7 +179,7 @@ for(const level of [1,2]) for(const [track,m] of Object.entries(P.RESCUE_ROUTES)
   for(let f=0;f<60*25&&R.state().phase!=='fail';f++){
     const fire=!fired&&firstGap.x0-R.state().x<80;
     fired ||= fire;
-    R.step({gas:true,fire});
+    R.step({gas:true,fire:fire||R.state().phase==='island',secure:true});
   }
   assert.equal(R.state().phase,'fail','missing the second launch must be recoverable');
   assert(R.state().cargo,'the egg was picked up before the missed jump');
@@ -180,9 +187,24 @@ for(const level of [1,2]) for(const [track,m] of Object.entries(P.RESCUE_ROUTES)
   assert(R.state().cargo&&R.state().x>=m.course.pickup,'retry keeps the egg and restarts on the return');
   assert.equal(R.state().rcd,0,'retry recharges the rocket');
 }
+{
+  const m=P.RESCUE_ROUTES.fiume;
+  R.reset(P.RESCUE_ID,m.sol,m.id);
+  for(let f=0;f<60*40&&['drive','island','pickup'].includes(R.state().phase);f++){
+    R.step({gas:true,fire:R.state().phase==='island'});
+  }
+  assert.equal(R.state().lastFail,'cargo','taking every wave at full gas with no protection puts the egg at risk');
+  const button=G.ui.button, buttons=[];
+  G.ui.button=o=>buttons.push(o.id);
+  try { G.sceneOf('strada').draw(context); } finally { G.ui.button=button; }
+  assert(!buttons.includes('fix'),'a cargo bump must guide the child back to the road');
+  for(let f=0;f<75;f++)R.step({});
+  assert(R.state().cargo&&R.state().phase==='drive','the basket keeps the egg after a rough return');
+  assert.equal(R.state().strain,0);
+}
 G.accounts.login('legacy');assert.equal(G.officinaSave().rescues.rampa,undefined,'the rescue belongs to the active child');G.accounts.login('p-old');
 
 // ---- scenes draw
 for(const [name,arg] of [['accesso'],['menu'],['officina',{mi:0}],['officina',{mi:-1}],['strada',{mi:4,v:P.MISSIONS[4].sol}]]){const sc=G.sceneOf(name);if(sc.enter)sc.enter(arg||{});sc.draw(context);}
 R.state().phase='win';G.sceneOf('strada').draw(context);
-console.log('PASS Dino Officina: 20 original missions, three practice tracks, both rescue routes at both ages, cargo retry, separate saves');
+console.log('PASS Dino Officina: both rescue routes at both ages, manual pickup, protected cargo, cargo retry and existing missions');

@@ -3,7 +3,24 @@
 (function () {
   'use strict';
   var C = G.C, W = G.W, H = G.H, page = -1;
-  var CARD = { w: 252, h: 290, y: 176, gap: 20 };
+  var CARD = { w: 252, h: 290, y: 272, gap: 20 };
+
+  function rescueCard(c, sv) {
+    var rescued = Object.keys(sv.rescues).length;
+    var paint = c.createLinearGradient(125, 108, 1150, 205);
+    paint.addColorStop(0, '#224658'); paint.addColorStop(1, '#285b60');
+    c.fillStyle = '#173344'; G.roundRect(c, 120, 110, 1040, 105, 30); c.fill();
+    c.fillStyle = paint; G.roundRect(c, 120, 103, 1040, 105, 30); c.fill();
+    c.fillStyle = '#f8cb7c'; c.beginPath(); c.arc(184, 155, 38, 0, 7); c.fill();
+    G.officinaEgg(c, 184, 153, 25);
+    G.text('Squadra di soccorso', 246, 136, { size: 36, color: '#fff1bd', align: 'left' });
+    var line = rescued === 2 ? 'Uovo in salvo da entrambe le vie!' : rescued ? 'Uovo in salvo! Prova l’altra via' : 'L’uovo sull’isolotto';
+    G.text(line, 246, 175, { size: 23, color: '#d9effb', align: 'left' });
+    c.fillStyle = '#f8cb7c'; G.roundRect(c, 947, 124, 185, 63, 21); c.fill();
+    G.text('Parti  ▶', 1041, 155, { size: 26, color: '#234355' });
+    G.ui.button({ id: 'rescue', ghost: true, x: 120, y: 103, w: 1040, h: 105, r: 30,
+      onTap: function () { G.go('officina', { mi: G.percorsi.RESCUE_ID }); } });
+  }
 
   function card(c, m, i, x, y, open, stars) {
     var r = G.percorsi.RACCOLTE[m.r];
@@ -32,8 +49,9 @@
       if (page < 0) page = all[Math.min(sv.open, all.length - 1)].r;
       var g = c.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#4d9eaa'); g.addColorStop(.7, '#b9e2df'); g.addColorStop(.71, '#c8a879'); g.addColorStop(1, '#8e6f4e');
       c.fillStyle = g; c.fillRect(0, 0, W, H);
-      G.text('DINO OFFICINA', 640, 62, { size: 66, color: C.cream, stroke: C.leafDeep, strokeWidth: 12 });
-      G.text((page + 1) + ' · ' + R[page].name, 640, 136, { size: 32, color: C.cream, stroke: C.leafDeep, strokeWidth: 8 });
+      G.text('DINO OFFICINA', 640, 55, { size: 62, color: C.cream, stroke: C.leafDeep, strokeWidth: 12 });
+      rescueCard(c, sv);
+      G.text((page + 1) + ' · ' + R[page].name, 640, 244, { size: 29, color: C.cream, stroke: C.leafDeep, strokeWidth: 8 });
       var list = R[page].missions, x0 = (W - (4 * CARD.w + 3 * CARD.gap)) / 2;
       list.forEach(function (m, j) {
         var x = x0 + j * (CARD.w + CARD.gap), open = m.idx <= sv.open;
@@ -45,15 +63,8 @@
       });
       [[-1, 46], [1, 1234]].forEach(function (d) {
         var to = page + d[0]; if (to < 0 || to >= R.length) return;
-        G.ui.round({ id: 'pg' + d[0], x: d[1], y: 320, r: 46, color: C.sun, icon: function (cc, x, y) { cc.fillStyle = C.leafDeep; cc.beginPath(); cc.moveTo(x + d[0] * 20, y); cc.lineTo(x - d[0] * 13, y - 20); cc.lineTo(x - d[0] * 13, y + 20); cc.fill(); }, onTap: function () { page = to; G.sfx('whoosh'); } });
+        G.ui.round({ id: 'pg' + d[0], x: d[1], y: CARD.y + CARD.h / 2, r: 46, color: C.sun, icon: function (cc, x, y) { cc.fillStyle = C.leafDeep; cc.beginPath(); cc.moveTo(x + d[0] * 20, y); cc.lineTo(x - d[0] * 13, y - 20); cc.lineTo(x - d[0] * 13, y + 20); cc.fill(); }, onTap: function () { page = to; G.sfx('whoosh'); } });
       });
-      var rescued = Object.keys(sv.rescues).length;
-      c.fillStyle = '#182e44'; G.roundRect(c, 307, 483, 666, 94, 26); c.fill();
-      G.officinaEgg(c, 367, 530, 29);
-      G.text('Squadra di soccorso', 417, 514, { size: 32, color: '#fff1bd', align: 'left' });
-      G.text(rescued === 2 ? 'Uovo in salvo da entrambe le vie!' : rescued ? 'Uovo in salvo! Prova l’altra via' : 'L’uovo sull’isolotto', 418, 547, { size: 23, color: '#d9effb', align: 'left' });
-      G.text('▶', 922, 531, { size: 30, color: '#fff1bd' });
-      G.ui.button({ id: 'rescue', ghost: true, x: 307, y: 483, w: 666, h: 94, r: 26, onTap: function () { G.go('officina', { mi: G.percorsi.RESCUE_ID }); } });
       G.ui.button({ id: 'profiles', x: 20, y: 600, w: 260, h: 100, color: C.water, label: 'Cambia dino', onTap: function () { G.accounts.logout(); G.go('accesso'); } });
       G.ui.button({ id: 'free', x: 300, y: 600, w: 300, h: 100, color: C.plum, label: 'Officina libera', fontSize: 30, onTap: function () { G.go('officina', { mi: -1 }); } });
       var next = Math.min(sv.open, all.length - 1);

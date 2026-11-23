@@ -7,10 +7,11 @@ librerie né risorse esterne.
 
 Dal menu scegli **L’uovo sull’isolotto**. La via del fiume si attraversa
 con barca ed elica, la via delle rampe con ruote grandi e razzo. All’isolotto
-l’uovo sale da solo sul veicolo. Al ritorno il carico oscilla e rende la guida
-più lenta. Se cadi dopo averlo raccolto, riparti con l’uovo già a bordo.
+tocca l’uovo per caricarlo. Al ritorno tieni premuto **Tieni l’uovo** (↓ su
+tastiera) sulle onde e all’atterraggio per tenerlo fermo. Se perdi l’assetto,
+il cesto recupera l’uovo e riparti con il carico. L’uovo si schiude al nido.
 
-Piccolo vede entrambi i progetti e si ferma sulla rampa finché tocca il
+Piccolo può montare il progetto con un tocco e si ferma sulla rampa finché tocca il
 razzo. Grande vede il terreno e sceglie quando partire. La mappa ricorda
 quali vie ha completato ciascun bambino. I due montaggi restano salvati
 separatamente.
