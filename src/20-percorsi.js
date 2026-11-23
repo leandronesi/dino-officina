@@ -10,12 +10,13 @@
   var STEP = 8, BASE = 520;
 
   function build(segs) {
-    var ys = [], zone = [], obst = [], cps = [0], fruits = [], waters = [], y = BASE, x = 0;
+    var ys = [], zone = [], obst = [], cps = [0], fruits = [], waters = [], pickup = null, y = BASE, x = 0;
     function put(yy, z) { ys.push(yy); zone.push(z || 0); x += STEP; }
     function fruitsAlong(x0, x1, lift) { for (var fx = x0 + 60; fx < x1 - 40; fx += 140) fruits.push({ x: fx, dy: lift || 70 }); }
     function smooth(t) { return t * t * (3 - 2 * t); }
     segs.forEach(function (s) {
       var k = s[0], L = s[1] || 0, h = s[2] || 0, x0 = x, i, n = Math.round(L / STEP);
+      if (k === 'pickup') { pickup = x; return; }
       if (k !== 'flat' && k !== 'hills' && k !== 'down' && k !== 'finish') cps.push(Math.max(0, x0 - 160));
       if (k === 'flat') { for (i = 0; i < n; i++) put(y); fruitsAlong(x0, x); }
       else if (k === 'hills') { var bumps = Math.max(1, Math.round(L / 400)); for (i = 0; i < n; i++) put(y - h * (1 - Math.cos(Math.PI * 2 * bumps * i / n)) / 2); fruitsAlong(x0, x, 70 + h); }
@@ -38,7 +39,7 @@
       else if (k === 'finish') { for (i = 0; i < Math.round(700 / STEP); i++) put(y); }
     });
     fruits.forEach(function (f) { if (!f.abs) { var i = Math.min(ys.length - 1, Math.floor(f.x / STEP)); f.y = ys[i] - f.dy; } });
-    return { ys: ys, zone: zone, obst: obst, cps: cps, fruits: fruits, waters: waters, len: x, finish: x - 500 };
+    return { ys: ys, zone: zone, obst: obst, cps: cps, fruits: fruits, waters: waters, pickup: pickup, len: x, finish: x - 500 };
   }
 
   var V = function (telaio, ruote, motore, extra) { return { telaio: telaio, ruote: ruote, motore: motore, extra: extra }; };
@@ -82,6 +83,26 @@
     return Object.prototype.hasOwnProperty.call(FREE_TRACKS, key) ? FREE_TRACKS[key] : FREE_TRACKS.colline;
   }
 
+  var RESCUE_ID = -2;
+  var RESCUE_ROUTES = {
+    fiume: {
+      id: 'fiume', name: 'Via del fiume', r: 1, icon: 'water', tip: 'Due bracci di fiume con una forte corrente.',
+      sol: V('barca', 'piccole', 'elica', 'niente'),
+      course: build([['flat', 520], ['water', 670, 90], ['flat', 320], ['pickup'], ['flat', 300], ['water', 750, 90], ['flat', 400], ['finish']])
+    },
+    rampa: {
+      id: 'rampa', name: 'Via delle rampe', r: 2, icon: 'gap', tip: 'Una salita ripida, due rampe e due burroni.',
+      sol: V('auto', 'grandi', 'normale', 'razzo'),
+      course: build([['flat', 380], ['steep', 420, 145], ['ramp', 0, 98], ['gap', 390, 85], ['flat', 480], ['pickup'], ['flat', 420], ['ramp', 0, 90], ['gap', 360, 95], ['flat', 400], ['finish']])
+    }
+  };
+  Object.keys(RESCUE_ROUTES).forEach(function (id) { RESCUE_ROUTES[id].course.fruits = []; });
+
+  function mission(mi, track) {
+    if (mi === RESCUE_ID) return track === 'rampa' ? RESCUE_ROUTES.rampa : RESCUE_ROUTES.fiume;
+    return mi < 0 ? freeTrack(track) : MISSIONS[mi];
+  }
+
   function groundAt(cs, x) {
     var f = x / STEP, i = Math.floor(f);
     if (i < 0) return { y: cs.ys[0], slope: 0, zone: 0 };
@@ -93,5 +114,8 @@
   function waterAt(cs, x) { for (var i = 0; i < cs.waters.length; i++) { var w = cs.waters[i]; if (x >= w.x0 && x <= w.x1) return w; } return null; }
   function obstacleAt(cs, x) { var best = null; cs.obst.forEach(function (o) { if (x >= o.x0 - 260 && x <= o.x1 + 60) best = o; }); return best; }
 
-  G.percorsi = { RACCOLTE: RACCOLTE, MISSIONS: MISSIONS, FREE: FREE_TRACKS.colline, FREE_TRACKS: FREE_TRACKS, freeTrack: freeTrack, groundAt: groundAt, waterAt: waterAt, obstacleAt: obstacleAt, STEP: STEP };
+  G.percorsi = {
+    RACCOLTE: RACCOLTE, MISSIONS: MISSIONS, FREE: FREE_TRACKS.colline, FREE_TRACKS: FREE_TRACKS, freeTrack: freeTrack,
+    RESCUE_ID: RESCUE_ID, RESCUE_ROUTES: RESCUE_ROUTES, mission: mission, groundAt: groundAt, waterAt: waterAt, obstacleAt: obstacleAt, STEP: STEP
+  };
 })();

@@ -1893,12 +1893,13 @@ html, body {
   var STEP = 8, BASE = 520;
 
   function build(segs) {
-    var ys = [], zone = [], obst = [], cps = [0], fruits = [], waters = [], y = BASE, x = 0;
+    var ys = [], zone = [], obst = [], cps = [0], fruits = [], waters = [], pickup = null, y = BASE, x = 0;
     function put(yy, z) { ys.push(yy); zone.push(z || 0); x += STEP; }
     function fruitsAlong(x0, x1, lift) { for (var fx = x0 + 60; fx < x1 - 40; fx += 140) fruits.push({ x: fx, dy: lift || 70 }); }
     function smooth(t) { return t * t * (3 - 2 * t); }
     segs.forEach(function (s) {
       var k = s[0], L = s[1] || 0, h = s[2] || 0, x0 = x, i, n = Math.round(L / STEP);
+      if (k === 'pickup') { pickup = x; return; }
       if (k !== 'flat' && k !== 'hills' && k !== 'down' && k !== 'finish') cps.push(Math.max(0, x0 - 160));
       if (k === 'flat') { for (i = 0; i < n; i++) put(y); fruitsAlong(x0, x); }
       else if (k === 'hills') { var bumps = Math.max(1, Math.round(L / 400)); for (i = 0; i < n; i++) put(y - h * (1 - Math.cos(Math.PI * 2 * bumps * i / n)) / 2); fruitsAlong(x0, x, 70 + h); }
@@ -1921,7 +1922,7 @@ html, body {
       else if (k === 'finish') { for (i = 0; i < Math.round(700 / STEP); i++) put(y); }
     });
     fruits.forEach(function (f) { if (!f.abs) { var i = Math.min(ys.length - 1, Math.floor(f.x / STEP)); f.y = ys[i] - f.dy; } });
-    return { ys: ys, zone: zone, obst: obst, cps: cps, fruits: fruits, waters: waters, len: x, finish: x - 500 };
+    return { ys: ys, zone: zone, obst: obst, cps: cps, fruits: fruits, waters: waters, pickup: pickup, len: x, finish: x - 500 };
   }
 
   var V = function (telaio, ruote, motore, extra) { return { telaio: telaio, ruote: ruote, motore: motore, extra: extra }; };
@@ -1965,6 +1966,26 @@ html, body {
     return Object.prototype.hasOwnProperty.call(FREE_TRACKS, key) ? FREE_TRACKS[key] : FREE_TRACKS.colline;
   }
 
+  var RESCUE_ID = -2;
+  var RESCUE_ROUTES = {
+    fiume: {
+      id: 'fiume', name: 'Via del fiume', r: 1, icon: 'water', tip: 'Due bracci di fiume con una forte corrente.',
+      sol: V('barca', 'piccole', 'elica', 'niente'),
+      course: build([['flat', 520], ['water', 670, 90], ['flat', 320], ['pickup'], ['flat', 300], ['water', 750, 90], ['flat', 400], ['finish']])
+    },
+    rampa: {
+      id: 'rampa', name: 'Via delle rampe', r: 2, icon: 'gap', tip: 'Una salita ripida, due rampe e due burroni.',
+      sol: V('auto', 'grandi', 'normale', 'razzo'),
+      course: build([['flat', 380], ['steep', 420, 145], ['ramp', 0, 98], ['gap', 390, 85], ['flat', 480], ['pickup'], ['flat', 420], ['ramp', 0, 90], ['gap', 360, 95], ['flat', 400], ['finish']])
+    }
+  };
+  Object.keys(RESCUE_ROUTES).forEach(function (id) { RESCUE_ROUTES[id].course.fruits = []; });
+
+  function mission(mi, track) {
+    if (mi === RESCUE_ID) return track === 'rampa' ? RESCUE_ROUTES.rampa : RESCUE_ROUTES.fiume;
+    return mi < 0 ? freeTrack(track) : MISSIONS[mi];
+  }
+
   function groundAt(cs, x) {
     var f = x / STEP, i = Math.floor(f);
     if (i < 0) return { y: cs.ys[0], slope: 0, zone: 0 };
@@ -1976,7 +1997,10 @@ html, body {
   function waterAt(cs, x) { for (var i = 0; i < cs.waters.length; i++) { var w = cs.waters[i]; if (x >= w.x0 && x <= w.x1) return w; } return null; }
   function obstacleAt(cs, x) { var best = null; cs.obst.forEach(function (o) { if (x >= o.x0 - 260 && x <= o.x1 + 60) best = o; }); return best; }
 
-  G.percorsi = { RACCOLTE: RACCOLTE, MISSIONS: MISSIONS, FREE: FREE_TRACKS.colline, FREE_TRACKS: FREE_TRACKS, freeTrack: freeTrack, groundAt: groundAt, waterAt: waterAt, obstacleAt: obstacleAt, STEP: STEP };
+  G.percorsi = {
+    RACCOLTE: RACCOLTE, MISSIONS: MISSIONS, FREE: FREE_TRACKS.colline, FREE_TRACKS: FREE_TRACKS, freeTrack: freeTrack,
+    RESCUE_ID: RESCUE_ID, RESCUE_ROUTES: RESCUE_ROUTES, mission: mission, groundAt: groundAt, waterAt: waterAt, obstacleAt: obstacleAt, STEP: STEP
+  };
 })();
 
 
@@ -2006,14 +2030,17 @@ html, body {
 
   G.officinaSave = function () {
     var s = G.save.officina || (G.save.officina = {});
-    s.open = s.open || 0; s.stars = s.stars || {}; s.builds = s.builds || {};
+    s.open = s.open || 0; s.stars = s.stars || {}; s.builds = s.builds || {}; s.rescues = s.rescues || {};
     return s;
   };
-  function mission() { return S.mi >= 0 ? G.percorsi.MISSIONS[S.mi] : G.percorsi.freeTrack(S.track); }
+  function rescue() { return S.mi === G.percorsi.RESCUE_ID; }
+  function mission() { return G.percorsi.mission(S.mi, S.track); }
   // the project is a picture to copy, never a lock: any piece can go on, and the road decides
-  function matches(slot) { return S.mi >= 0 && G.level === 1 && S.v[slot] === mission().sol[slot]; }
+  function matches(slot) { var m = mission(); return G.level === 1 && !!m.sol && S.v[slot] === m.sol[slot]; }
   function complete() { return G.officina.SLOTS.every(function (s) { return !!S.v[s]; }); }
   var EMPTY = function () { return { telaio: null, ruote: null, motore: null, extra: null }; };
+  function buildKey() { return rescue() ? 'soccorso-' + S.track : S.mi; }
+  function restoreBuild(sv) { S.v = Object.assign(EMPTY(), sv.builds[buildKey()]); }
 
   function obstacleKinds(m) { var k = []; m.course.obst.forEach(function (o) { if (k.indexOf(o.k) < 0) k.push(o.k); }); return k; }
   function obstIcon(c, k, x, y, s) {
@@ -2029,21 +2056,25 @@ html, body {
 
   function enter(o) {
     o = o || {};
-    var sv = G.officinaSave(), m;
+    var sv = G.officinaSave();
     S = { mi: o.mi === undefined ? -1 : o.mi, hint: o.hint || null, track: sv.track || 'colline', snap: {}, tip: '', preview: 0 };
-    m = mission();
-    var prev = sv.builds[S.mi];
-    S.v = prev ? Object.assign(EMPTY(), prev) : EMPTY();
+    if (rescue()) {
+      S.track = G.percorsi.mission(S.mi, o.track || sv.rescueRoute).id;
+      if (sv.rescueRoute !== S.track) { sv.rescueRoute = S.track; G.saveNow(); }
+    }
+    var m = mission();
+    restoreBuild(sv);
     var current = S;
     if (!G.mute) setTimeout(function () {
       if (G.current !== 'officina' || S !== current || S.tip) return;
-      if (S.mi < 0) G.say('Monta quello che vuoi, poi provalo!');
+      if (rescue()) G.say('Un uovo è rimasto sull’isolotto! Scegli la strada e monta il veicolo.');
+      else if (S.mi < 0) G.say('Monta quello che vuoi, poi provalo!');
       else if (G.level === 1) G.say('Guarda il progetto e monta i pezzi!');
       else G.say(m.name + '. Guarda cosa c\'è sulla strada e scegli i pezzi.');
     }, 300);
   }
   function saveBuild() {
-    G.officinaSave().builds[S.mi] = Object.assign({}, S.v);
+    G.officinaSave().builds[buildKey()] = Object.assign({}, S.v);
     G.saveNow();
   }
   function choose(slot, id) {
@@ -2053,9 +2084,16 @@ html, body {
     G.say(S.tip + (!missing ? ' Puoi provare su strada.' : missing === 'extra' ? ' Scegli un extra, oppure Nessuno.' : ''));
   }
   function chooseTrack(key) {
+    if (S.track === key) return;
     S.track = key; S.hint = null; S.tip = '';
-    G.officinaSave().track = key; G.saveNow();
-    G.say(G.percorsi.freeTrack(key).tip);
+    var sv = G.officinaSave();
+    if (rescue()) {
+      sv.rescueRoute = key;
+      S.preview = 0; S.snap = {};
+      restoreBuild(sv);
+    } else sv.track = key;
+    G.saveNow();
+    G.say(mission().tip);
   }
   function prova() {
     if (!complete()) {
@@ -2078,7 +2116,8 @@ html, body {
     // top bar
     c.fillStyle = '#122c3a'; c.fillRect(0, 0, W, 96);
     G.ui.button({ id: 'of-map', x: 16, y: 8, w: 200, h: 80, r: 24, color: C.water, label: 'Mappa', fontSize: 30, onTap: function () { G.go('menu'); } });
-    G.text(S.mi >= 0 ? (G.percorsi.RACCOLTE[m.r].name + ' · ' + m.name) : 'Officina libera', 640, 48, { size: 34, color: C.sun, maxWidth: 760 });
+    var title = rescue() ? 'L’uovo sull’isolotto' : S.mi >= 0 ? G.percorsi.RACCOLTE[m.r].name + ' · ' + m.name : 'Officina libera';
+    G.text(title, 640, 48, { size: 34, color: C.sun, maxWidth: 760 });
     if (OF.SLOTS.some(function (slot) { return !!S.v[slot]; })) {
       G.ui.button({ id: 'of-clear', x: 1072, y: 16, w: 188, h: 64, r: 20, color: '#39596b', label: 'Smonta tutto', fontSize: 23, onTap: function () {
         S.v = EMPTY(); S.preview = 0; S.hint = null; S.tip = 'Scegli i pezzi per il prossimo veicolo.'; saveBuild();
@@ -2113,7 +2152,20 @@ html, body {
         onTap: function () { S.preview = 1.2; G.sfx(S.v.extra === 'razzo' ? 'whoosh' : 'pop'); } });
     }
     // Piccolo: the picture to copy. Grande: what waits on the road.
-    if (S.mi >= 0 && G.level === 1) {
+    if (rescue()) {
+      G.text(G.level === 1 ? 'Scegli il tuo progetto' : 'Scegli la strada', 970, 125, { size: 24, color: C.cream });
+      Object.keys(G.percorsi.RESCUE_ROUTES).forEach(function (key, i) {
+        var route = G.percorsi.RESCUE_ROUTES[key], x = 700 + i * 280;
+        c.fillStyle = route === m ? '#fff0ad' : '#e4edf1'; G.roundRect(c, x, 145, 260, 112, 18); c.fill();
+        if (route === m) { c.strokeStyle = '#f4b646'; c.lineWidth = 4; c.stroke(); }
+        G.text(route.name, x + 130, 165, { size: 22, color: C.ink });
+        if (G.level === 1) OF.drawVehicle(c, route.sol, x + 130, 248, { s: .46, t: G.t });
+        else if (key === 'rampa') { obstIcon(c, 'steep', x + 86, 217, .77); obstIcon(c, 'gap', x + 174, 217, .77); }
+        else obstIcon(c, route.icon, x + 130, 217, .83);
+        if (G.officinaSave().rescues[key]) A.star(c, x + 234, 174, 13, C.sun);
+        G.ui.button({ id: 'rescue-' + key, ghost: true, x: x, y: 145, w: 260, h: 112, r: 18, onTap: function () { chooseTrack(key); } });
+      });
+    } else if (S.mi >= 0 && G.level === 1) {
       c.fillStyle = '#fff6e0'; G.roundRect(c, 760, 112, 340, 150, 20); c.fill(); c.strokeStyle = '#8a5a32'; c.lineWidth = 8; c.stroke();
       G.text('Il progetto', 930, 140, { size: 22, color: C.leafDeep });
       OF.drawVehicle(c, m.sol, 930, 249, { s: .65, t: G.t });
@@ -2139,7 +2191,7 @@ html, body {
     var ready = complete();
     var count = OF.SLOTS.filter(function (s) { return !!S.v[s]; }).length;
     G.text(count + ' di 4 pezzi montati', 950, 600, { size: 22, color: '#fff6e0', stroke: '#59402f', strokeWidth: 5 });
-    G.ui.button({ id: 'prova', x: 762, y: 617, w: 376, h: 90, r: 28, color: ready ? C.leaf : '#77695e', label: 'Prova su strada', fontSize: 34, onTap: prova });
+    G.ui.button({ id: 'prova', x: 762, y: 617, w: 376, h: 90, r: 28, color: ready ? C.leaf : '#77695e', label: rescue() ? 'Salva l’uovo!' : 'Prova su strada', fontSize: 34, onTap: prova });
   }
 
   G.scene('officina', {
@@ -2161,7 +2213,7 @@ html, body {
    All rules live in S (plain data, fixed 1/60 s step) for test/smoke.js. */
 (function () {
   'use strict';
-  var C = G.C, W = G.W, H = G.H, DT = 1 / 60, GRAV = 1400;
+  var C = G.C, W = G.W, H = G.H, DT = 1 / 60, GRAV = 1400, PICKUP_TIME = 1.05;
   var P = function () { return G.percorsi; }, O = function () { return G.officina; };
   var S = null, quiet = false, acc = 0, touches = {}, keys = {}, actPending = false;
 
@@ -2169,6 +2221,7 @@ html, body {
     steep: 'Troppo ripida! Servono ruote più grandi.',
     vsteep: 'Ripidissima! Solo i cingoli si arrampicano qui.',
     water: 'Splash! Per l\'acqua serve la barca.',
+    current: 'Monta l’elica per risalire la corrente.',
     gap: 'Il burrone è largo: prova il razzo, le ali o i palloncini.',
     wall: 'Il muro è alto: serve la molla o il razzo.'
   };
@@ -2176,15 +2229,27 @@ html, body {
   function sfx(n) { if (!quiet) G.sfx(n); }
   function say(s) { if (!quiet) G.say(s); }
   function course() { return mission().course; }
-  function mission() { return S.mi < 0 ? P().freeTrack(S.track) : P().MISSIONS[S.mi]; }
+  function mission() { return P().mission(S.mi, S.track); }
+  function rescue() { return S.mi === P().RESCUE_ID; }
 
   function reset(mi, v, track) {
-    var cs = (mi < 0 ? P().freeTrack(track) : P().MISSIONS[mi]).course;
+    var m = P().mission(mi, track), cs = m.course;
+    if (mi === P().RESCUE_ID) track = m.id;
     S = { mi: mi, v: v, track: track, phase: 'drive', t: 0, x: 120, y: P().groundAt(cs, 120).y, vx: 0, vy: 0, on: true, ang: 0, rot: 0, got: {}, fruit: 0, fails: 0, failAt: {},
-      rt: 0, rcd: 0, spring: 0, maxX: 120, stuckT: 0, hint: null, msgT: 0, timer: 0, prevAct: false, lastFail: null, cruise: false };
+      rt: 0, rcd: 0, spring: 0, maxX: 120, stuckT: 0, hint: null, msgT: 0, timer: 0, prevAct: false, lastFail: null, cruise: false,
+      cargo: false, wobble: 0, wobbleSpeed: 0, assist: false };
     acc = 0; clearControls();
   }
 
+  function launchNearby(cs) {
+    return cs.obst.some(function (o) {
+      return (o.k === 'gap' || o.k === 'wall') && o.x0 - S.x >= -20 && o.x0 - S.x <= 95;
+    });
+  }
+  function settleCargo() {
+    S.cargo = true; S.phase = 'drive'; S.maxX = S.x; S.stuckT = 0; S.rcd = 0;
+    say('Preso! Riporta l’uovo al nido.');
+  }
   function fail(kind) {
     if (S.phase !== 'drive') return;
     S.phase = 'fail'; S.timer = 1.1; S.fails++; S.lastFail = kind;
@@ -2196,18 +2261,29 @@ html, body {
   function respawn() {
     var cs = course(), cp = 0;
     cs.cps.forEach(function (c) { if (c < S.x - 30 && c > cp) cp = c; });
+    if (S.cargo) cp = Math.max(cp, cs.pickup);
     S.x = Math.max(120, cp); S.y = P().groundAt(cs, S.x).y; S.vx = 0; S.vy = 0; S.on = true; S.rt = 0; S.rcd = 0; S.spring = 0; S.phase = 'drive';
-    S.maxX = S.x; S.stuckT = 0;
+    S.maxX = S.x; S.stuckT = 0; S.wobble = 0; S.wobbleSpeed = 0; S.assist = false;
   }
 
   function step(inp) {
     S.t += DT; S.msgT = Math.max(0, S.msgT - DT);
     if (S.phase === 'fail') { if ((S.timer -= DT) <= 0) respawn(); return; }
+    if (S.phase === 'pickup') { if ((S.timer -= DT) <= 0) settleCargo(); return; }
     if (S.phase !== 'drive') return;
     var cs = course(), st = O().stats(S.v), g = GRAV * st.gravity, gr = P().groundAt(cs, S.x), w = P().waterAt(cs, S.x);
+    var previousVX = S.vx;
+    if (S.cargo) { st.speed *= .84; st.accel *= .78; }
     var actEdge = inp.fire || (inp.act && !S.prevAct); S.prevAct = !!inp.act;
     S.rcd = Math.max(0, S.rcd - DT); S.spring = Math.max(0, S.spring - DT);
 
+    if (rescue() && G.level === 1 && st.rocket && S.on && S.rcd <= 0 && launchNearby(cs)) {
+      if (!S.assist && !actEdge && !inp.back) say('Tocca il razzo!');
+      S.assist = !inp.back;
+      if (S.assist && !actEdge) { S.vx = 0; return; }
+      if (S.assist) S.vx = Math.max(S.vx, st.speed * .85);
+    }
+    S.assist = false;
     // buttons: rocket and spring
     if (actEdge && st.rocket && S.rcd <= 0) { S.rt = 1.1; S.rcd = 2.6; S.vy = Math.min(-100, S.vy); sfx('whoosh'); }
     if (actEdge && st.spring && S.on) { S.vy = -720; S.on = false; S.spring = .3; sfx('pop'); }
@@ -2221,9 +2297,10 @@ html, body {
         var top = st.speed * st.swim;
         if (inp.gas) S.vx = Math.min(top, S.vx + st.accel * .6 * DT); else S.vx *= Math.pow(.4, DT);
         if (inp.back) S.vx = Math.max(-top * .5, S.vx - st.accel * .5 * DT);
-        S.x += S.vx * DT; S.y = w.level; S.vy = 0; S.on = true; S.ang *= .9;
+        var current = rescue() ? 75 + 20 * Math.sin(S.t * 2) : 0;
+        S.x += (S.vx - current) * DT; S.y = w.level; S.vy = 0; S.on = true; S.ang *= .9;
         S.rot += S.vx * DT / st.wheel;
-        return after(cs, inp);
+        return after(cs, inp, previousVX);
       }
     }
 
@@ -2259,19 +2336,39 @@ html, body {
       if (S.y > lowest(cs) + 500) { fail('gap'); return; }
     }
     S.rot += S.vx * DT / st.wheel;
-    after(cs, inp);
+    after(cs, inp, previousVX);
   }
-  function after(cs, inp) {
-    if (S.x < 0) { S.x = 0; S.vx = Math.max(0, S.vx); }
+  function after(cs, inp, previousVX) {
+    var start = S.cargo ? cs.pickup : 0;
+    if (S.x < start) { S.x = start; S.vx = Math.max(0, S.vx); }
+    if (S.cargo) {
+      var lean = G.clamp((previousVX - S.vx) / 15, -.48, .48) - .55 * S.ang;
+      S.wobbleSpeed += (lean - S.wobble) * 19 * DT;
+      S.wobbleSpeed *= .93; S.wobble += S.wobbleSpeed * DT;
+    }
+    if (rescue() && !S.cargo && S.x >= cs.pickup) {
+      S.x = cs.pickup; S.vx = 0;
+      if (S.on) {
+        S.phase = 'pickup'; S.timer = PICKUP_TIME; S.hint = null; S.msgT = 0;
+        S.rt = 0; S.spring = 0; S.ang = 0; sfx('chime');
+      }
+      return;
+    }
     // fruit
     cs.fruits.forEach(function (f, i) { if (!S.got[i] && Math.hypot(f.x - S.x, f.y - (S.y - 50)) < 62) { S.got[i] = 1; S.fruit++; sfx('coin'); } });
     // stuck on a hill: offer to fix the vehicle instead of letting the child push forever
     if (S.x > S.maxX + 4) { S.maxX = S.x; S.stuckT = 0; }
     else if (inp.gas) S.stuckT += DT;
     if (S.stuckT > 3.5 && S.msgT <= 0) {
-      var o = P().obstacleAt(cs, S.x); S.hint = o ? o.k : 'steep'; S.msgT = 4; S.stuckT = 0; say(HINT[S.hint]);
+      var o = P().obstacleAt(cs, S.x);
+      S.hint = o ? o.k : 'steep';
+      if (rescue() && S.hint === 'water' && S.v.telaio === 'barca') S.hint = 'current';
+      S.msgT = 4; S.stuckT = 0; say(HINT[S.hint]);
     }
-    if (S.x >= cs.finish) win();
+    if (S.x >= cs.finish) {
+      if (rescue() && !S.on) { S.x = cs.finish; S.vx = 0; }
+      else win();
+    }
   }
   function lowest(cs) { if (cs.low === undefined) { cs.low = 0; cs.ys.forEach(function (y) { if (y < 5000 && y > cs.low) cs.low = y; }); } return cs.low; }
   function stars() { var n = course().fruits.length; var f = n ? S.fruit / n : 1; return f >= .8 ? 3 : f >= .45 ? 2 : 1; }
@@ -2279,12 +2376,62 @@ html, body {
     S.phase = 'win'; sfx('win'); if (!quiet) G.fx.confetti();
     if (S.mi >= 0) {
       var sv = G.officinaSave(); sv.stars[S.mi] = Math.max(sv.stars[S.mi] || 0, stars()); sv.open = Math.max(sv.open, Math.min(P().MISSIONS.length - 1, S.mi + 1)); G.saveNow();
+    } else if (rescue()) {
+      var saved = G.officinaSave();
+      saved.rescues[S.track] = 1; saved.rescueRoute = S.track; G.saveNow();
     }
-    say('Ce l\'hai fatta! Che macchina!');
+    say(rescue() ? 'Missione compiuta! L’uovo è al sicuro nel nido.' : 'Ce l\'hai fatta! Che macchina!');
   }
 
   /* ================================================================ drawing */
   var camX = 0, camY = 0;
+  function egg(c, x, y, r) {
+    c.save(); c.translate(x, y); c.scale(r / 30, r / 30);
+    c.fillStyle = '#fff0b9'; c.strokeStyle = '#5a4651'; c.lineWidth = 3;
+    c.beginPath(); c.moveTo(0, -35); c.bezierCurveTo(19, -35, 29, -7, 27, 12);
+    c.bezierCurveTo(23, 37, -23, 37, -27, 12); c.bezierCurveTo(-29, -7, -19, -35, 0, -35);
+    c.closePath(); c.fill(); c.stroke();
+    c.fillStyle = '#6ab7ab';
+    [[-13, 11, 6], [10, -8, 7], [11, 20, 4]].forEach(function (spot) {
+      c.beginPath(); c.arc(spot[0], spot[1], spot[2], 0, 7); c.fill();
+    });
+    c.restore();
+  }
+  G.officinaEgg = egg;
+  function nest(c, x, y, radius) {
+    c.fillStyle = '#7a4536'; c.beginPath(); c.ellipse(x, y, radius, radius * .33, 0, 0, 7); c.fill();
+    c.strokeStyle = '#bd814c'; c.lineWidth = 4;
+    for (var i = -2; i <= 2; i++) {
+      c.beginPath(); c.moveTo(x + i * radius * .35 - 8, y - radius * .19);
+      c.lineTo(x + i * radius * .35 + 6, y + radius * .19); c.stroke();
+    }
+  }
+  function rescueLandmark(c, cs, marker, label) {
+    var x = marker - camX, y = P().groundAt(cs, marker).y - camY;
+    if (x < -150 || x > W + 150) return;
+    c.fillStyle = '#714537'; c.fillRect(x - 5, y - 170, 10, 107);
+    c.fillStyle = '#234355'; G.roundRect(c, x - 92, y - 196, 184, 48, 14); c.fill();
+    G.text(label, x, y - 172, { size: 24, color: '#fff1bd' });
+    c.fillStyle = '#e7bc76'; G.roundRect(c, x - 70, y - 61, 140, 48, 13); c.fill();
+    nest(c, x, y - 63, 45);
+    if (marker === cs.pickup && !S.cargo && S.phase !== 'pickup') {
+      egg(c, x, y - 97 + Math.sin(S.t * 3) * 3, 30);
+      A.star(c, x + 37, y - 123, 8 + 3 * Math.sin(S.t * 5), C.sun);
+    } else if (marker === cs.finish) {
+      A.dino(c, x + 115, y + 2, 85, { facing: -1, pose: S.phase === 'win' ? 'happy' : 'idle', t: S.t, color: '#f0a463', hat: null });
+      if (S.phase === 'win') egg(c, x, y - 97, 30);
+    }
+  }
+  function drawCargo(c, st, x, y) {
+    if (S.phase === 'win' || (!S.cargo && S.phase !== 'pickup')) return;
+    c.save(); c.translate(x, y); c.rotate(S.ang);
+    var progress = S.cargo ? 1 : 1 - S.timer / PICKUP_TIME;
+    var holderY = -st.wheel - 36, eggY = holderY - 27;
+    nest(c, 63, holderY, 32);
+    if (S.cargo) { c.translate(63, eggY); c.rotate(S.wobble); egg(c, 0, 0, 25); }
+    else egg(c, progress * 63, -97 + progress * (eggY + 97) - 45 * Math.sin(progress * Math.PI), 30 - 5 * progress);
+    c.restore();
+  }
   function hash(n) { n = Math.imul(n ^ 0x5bd1e995, 0x27d4eb2d); n ^= n >>> 15; return ((n >>> 0) % 1000) / 1000; }
   function scenery(c) {
     var r = P().RACCOLTE[mission().r], g = c.createLinearGradient(0, 0, 0, H);
@@ -2299,7 +2446,7 @@ html, body {
   function terrain(c) {
     var cs = course(), x0 = Math.floor(camX / 8) * 8, sx, open = false, k;
     function close(endX) { c.lineTo(endX, H + 40); c.closePath(); c.fill(); open = false; }
-    c.fillStyle = '#9a6b3f';
+    c.fillStyle = rescue() ? '#a97458' : '#9a6b3f';
     for (sx = x0; sx <= camX + W + 16; sx += 8) {
       var gr = P().groundAt(cs, sx);
       if (gr.zone === 'gap') { if (open) close(sx - camX); continue; }
@@ -2308,7 +2455,7 @@ html, body {
     }
     if (open) close(camX + W + 16 - camX);
     // grass on top
-    c.strokeStyle = '#4fae4a'; c.lineWidth = 12; c.lineJoin = 'round'; c.beginPath(); open = false;
+    c.strokeStyle = rescue() ? '#64bc87' : '#4fae4a'; c.lineWidth = 12; c.lineJoin = 'round'; c.beginPath(); open = false;
     for (sx = x0; sx <= camX + W + 16; sx += 8) {
       var g2 = P().groundAt(cs, sx);
       if (g2.zone === 'gap' || g2.zone === 'water') { open = false; continue; }
@@ -2321,6 +2468,14 @@ html, body {
       c.fillStyle = 'rgba(63,169,214,.78)'; c.fillRect(w.x0 - camX, w.level - camY, w.x1 - w.x0, H);
       c.fillStyle = 'rgba(255,255,255,.55)';
       for (k = 0; k < (w.x1 - w.x0) / 60; k++) c.fillRect(w.x0 - camX + k * 60 + (Math.sin(S.t * 2 + k) * 8), w.level - camY + 6 + (k % 2) * 8, 26, 3);
+      if (rescue()) {
+        c.strokeStyle = '#d0f8ed'; c.lineWidth = 4;
+        for (var wx = w.x0 + 50; wx < w.x1 - 30; wx += 145) {
+          var lx = wx - camX - (S.t * 21) % 42, ly = w.level - camY + 40 + 10 * Math.sin(wx);
+          c.beginPath(); c.moveTo(lx + 43, ly); c.lineTo(lx, ly); c.lineTo(lx + 9, ly - 7);
+          c.moveTo(lx, ly); c.lineTo(lx + 9, ly + 7); c.stroke();
+        }
+      }
     });
     // trees and flowers on flat ground
     for (k = Math.floor(camX / 220); k < (camX + W) / 220 + 1; k++) {
@@ -2329,6 +2484,18 @@ html, body {
       var sx2 = tx - camX, sy = tg.y - camY + 4;
       if (hash(k * 3) < .5) { c.fillStyle = '#7a4a26'; c.fillRect(sx2 - 5, sy - 46, 10, 46); c.fillStyle = '#2f8f4e'; c.beginPath(); c.arc(sx2, sy - 60, 28, 0, 7); c.fill(); }
       else { c.fillStyle = C.pinkPop; c.beginPath(); c.arc(sx2, sy - 10, 6, 0, 7); c.arc(sx2 + 16, sy - 6, 5, 0, 7); c.fill(); }
+    }
+    if (rescue()) {
+      cs.obst.forEach(function (o) {
+        if (o.k !== 'gap' || o.x1 < camX || o.x0 > camX + W) return;
+        var surface = P().groundAt(cs, o.x1 + 8).y - camY + 100;
+        c.fillStyle = '#55b1cf'; c.fillRect(o.x0 - camX, surface, o.x1 - o.x0, H);
+        c.fillStyle = '#dcf9f1';
+        for (var px = o.x0 + 24; px < o.x1 - 54; px += 77) c.fillRect(px - camX + Math.sin(S.t * 2 + px) * 10, surface + 9, 39, 3);
+      });
+      rescueLandmark(c, cs, cs.pickup, 'Isolotto');
+      rescueLandmark(c, cs, cs.finish, 'Nido');
+      return;
     }
     // finish arch
     var fx = cs.finish - camX, fy = P().groundAt(cs, cs.finish).y - camY;
@@ -2342,15 +2509,24 @@ html, body {
     scenery(c); terrain(c);
     cs.fruits.forEach(function (f, i) { if (!S.got[i] && f.x > camX - 40 && f.x < camX + W + 40) A.fruit(c, f.x - camX, f.y - camY + Math.sin(S.t * 3 + i) * 4, 17, ['fragola', 'banana', 'uva', 'mela'][i % 4]); });
     O().drawVehicle(c, S.v, S.x - camX, S.y - camY, { ang: S.ang, rot: S.rot, gas: inputs().gas, boost: S.rt > 0, spring: S.spring > 0, happy: S.phase === 'win' });
+    if (rescue()) drawCargo(c, st, S.x - camX, S.y - camY);
     if (S.phase === 'fail' && S.lastFail === 'water') { c.fillStyle = 'rgba(255,255,255,.8)'; for (var k = 0; k < 6; k++) { c.beginPath(); c.arc(S.x - camX - 40 + k * 16, S.y - camY - 20 - Math.sin(k) * 20 * (1.1 - S.timer), 8, 0, 7); c.fill(); } }
     pads(c, st); hud(c, cs);
     if (S.phase === 'win') {
       c.fillStyle = 'rgba(18,61,41,.66)'; c.fillRect(0, 0, W, H);
       c.fillStyle = C.cream; G.roundRect(c, 260, 130, 760, 460, 36); c.fill();
-      G.text('Ce l\'hai fatta!', 640, 205, { size: 56, color: C.leafDeep });
-      G.text(S.fruit + ' frutti raccolti', 640, 262, { size: 28, color: C.ink });
+      G.text(rescue() ? 'L’uovo è al sicuro!' : 'Ce l\'hai fatta!', 640, 205, { size: 56, color: C.leafDeep });
+      G.text(rescue() ? mission().name + ' completata' : S.fruit + ' frutti raccolti', 640, 262, { size: 28, color: C.ink });
       var n = S.mi >= 0 ? stars() : 0;
       for (var s2 = 0; s2 < 3 && S.mi >= 0; s2++) A.star(c, 560 + s2 * 80, 330, 30, s2 < n ? C.sun : '#d8cdb8');
+      if (rescue()) {
+        nest(c, 640, 381, 65); egg(c, 640, 337 + Math.sin(S.t * 2.5) * 3, 40);
+        A.star(c, 561, 333, 17, C.sun); A.star(c, 719, 333, 17, C.sun);
+        G.ui.button({ id: 'w-again', x: 290, y: 420, w: 220, h: 110, color: C.water, label: 'Rigioca', onTap: function () { reset(S.mi, S.v, S.track); } });
+        G.ui.button({ id: 'w-other', x: 530, y: 420, w: 220, h: 110, color: C.leaf, label: 'Altra via', onTap: function () { G.go('officina', { mi: S.mi, track: S.track === 'rampa' ? 'fiume' : 'rampa' }); } });
+        G.ui.button({ id: 'w-map', x: 770, y: 420, w: 220, h: 110, color: C.tangerine, label: 'Mappa', onTap: function () { G.go('menu'); } });
+        return;
+      }
       var last = S.mi === P().MISSIONS.length - 1 || S.mi < 0;
       G.ui.button({ id: 'w-again', x: 290, y: 420, w: 220, h: 110, color: C.water, label: 'Riprova', onTap: function () { reset(S.mi, S.v, S.track); } });
       if (!last) G.ui.button({ id: 'w-next', x: 530, y: 420, w: 220, h: 110, color: C.leaf, label: 'Avanti', onTap: function () { G.go('officina', { mi: S.mi + 1 }); } });
@@ -2369,9 +2545,7 @@ html, body {
     box(PAD.gas, inp.gas, 'rgba(99,199,119,.9)', 1);
     if (st.rocket || st.spring) {
       var a = PAD.act, ready = st.rocket ? S.rcd <= 0 : S.on;
-      var near = ready && course().obst.some(function (o) {
-        return (o.k === 'gap' || o.k === 'wall') && o.x0 - S.x >= -20 && o.x0 - S.x <= 95;
-      });
+      var near = ready && launchNearby(course());
       c.fillStyle = ready ? '#fff1dc' : '#d6ccc1'; c.beginPath(); c.arc(a.cx, a.cy, a.r, 0, 7); c.fill();
       c.strokeStyle = near ? C.sun : ready ? C.berry : '#93887c'; c.lineWidth = near ? 12 : 5; c.stroke();
       if (st.rocket && !ready) {
@@ -2379,16 +2553,25 @@ html, body {
         c.arc(a.cx, a.cy, a.r, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * (1 - S.rcd / 2.6)); c.stroke();
       }
       O().drawPart(c, 'extra', st.rocket ? 'razzo' : 'molla', a.cx, a.cy - 20, 84);
-      G.text(ready ? st.rocket ? 'RAZZO' : 'MOLLA' : st.rocket ? 'RICARICA' : 'IN VOLO', a.cx, a.cy + 41, { size: 22, color: C.ink });
+      G.text(S.assist ? 'SALTA ORA!' : ready ? st.rocket ? 'RAZZO' : 'MOLLA' : st.rocket ? 'RICARICA' : 'IN VOLO', a.cx, a.cy + 41, { size: 22, color: C.ink });
     }
   }
   function hud(c, cs) {
     c.fillStyle = 'rgba(23,63,55,.86)'; G.roundRect(c, 250, 10, 780, 76, 24); c.fill();
-    A.fruit(c, 290, 48, 20, 'fragola'); G.text(String(S.fruit), 318, 49, { size: 32, color: C.cream, align: 'left' });
-    c.fillStyle = 'rgba(255,246,224,.25)'; G.roundRect(c, 400, 40, 420, 18, 9); c.fill();
-    c.fillStyle = C.sun; G.roundRect(c, 400, 40, 420 * G.clamp(S.x / cs.finish, 0, 1), 18, 9); c.fill();
-    G.text(mission().name, 925, 49, { size: 24, color: C.cream, maxWidth: 190 });
-    G.ui.button({ id: 'to-shop', x: 16, y: 8, w: 220, h: 84, r: 24, color: C.tangerine, label: 'Officina', fontSize: 30, onTap: function () { G.go('officina', { mi: S.mi }); } });
+    var progress = G.clamp(S.x / cs.finish, 0, 1);
+    if (rescue()) {
+      egg(c, 294, 49, 19);
+      G.text(S.cargo ? 'Torna al nido' : S.phase === 'pickup' ? 'Uovo trovato!' : 'Raggiungi l’isolotto', 327, 49, { size: 25, color: C.cream, align: 'left' });
+      c.fillStyle = 'rgba(255,246,224,.25)'; G.roundRect(c, 670, 40, 318, 18, 9); c.fill();
+      c.fillStyle = S.cargo ? '#95e6b9' : C.sun; G.roundRect(c, 670, 40, 318 * progress, 18, 9); c.fill();
+      c.fillStyle = C.cream; c.beginPath(); c.arc(670 + 318 * cs.pickup / cs.finish, 49, 7, 0, 7); c.fill();
+    } else {
+      A.fruit(c, 290, 48, 20, 'fragola'); G.text(String(S.fruit), 318, 49, { size: 32, color: C.cream, align: 'left' });
+      c.fillStyle = 'rgba(255,246,224,.25)'; G.roundRect(c, 400, 40, 420, 18, 9); c.fill();
+      c.fillStyle = C.sun; G.roundRect(c, 400, 40, 420 * progress, 18, 9); c.fill();
+      G.text(mission().name, 925, 49, { size: 24, color: C.cream, maxWidth: 190 });
+    }
+    G.ui.button({ id: 'to-shop', x: 16, y: 8, w: 220, h: 84, r: 24, color: C.tangerine, label: 'Officina', fontSize: 30, onTap: function () { G.go('officina', { mi: S.mi, track: S.track }); } });
     G.ui.button({ id: 'to-map', x: 1048, y: 8, w: 216, h: 84, r: 24, color: C.water, label: 'Mappa', fontSize: 30, onTap: function () { G.go('menu'); } });
     if (S.phase !== 'win') {
       G.ui.button({ id: 'cruise', x: 1048, y: 104, w: 216, h: 64, r: 20, color: S.cruise ? C.berry : C.leafDeep,
@@ -2397,7 +2580,7 @@ html, body {
     if (S.msgT > 0 && S.hint && S.phase !== 'win') {
       c.fillStyle = 'rgba(23,63,55,.9)'; G.roundRect(c, 250, 104, 780, 120, 26); c.fill();
       G.text(HINT[S.hint], 640, 138, { size: 27, color: C.cream, maxWidth: 740 });
-      G.ui.button({ id: 'fix', x: 520, y: 160, w: 240, h: 56, r: 20, color: C.tangerine, label: 'Aggiusta', fontSize: 26, onTap: function () { G.go('officina', { mi: S.mi, hint: S.hint }); } });
+      G.ui.button({ id: 'fix', x: 520, y: 160, w: 240, h: 56, r: 20, color: C.tangerine, label: 'Aggiusta', fontSize: 26, onTap: function () { G.go('officina', { mi: S.mi, track: S.track, hint: S.hint }); } });
     }
   }
 
@@ -2423,7 +2606,8 @@ html, body {
     enter: function (o) {
       reset(o.mi, o.v, o.track); camX = S.x - 380; camY = S.y - 470;
       var st = O().stats(o.v);
-      say(st.rocket ? 'Tieni premuto il pedale verde. Quando il razzo si illumina, toccalo!' :
+      say(rescue() && G.level === 1 ? 'Raggiungi l’isolotto! Puoi usare il gas automatico.' :
+        st.rocket ? 'Tieni premuto il pedale verde. Quando il razzo si illumina, toccalo!' :
         st.spring ? 'Tieni premuto il pedale verde. Tocca la molla per saltare!' : 'Tieni premuto il pedale verde!');
     },
     update: function (dt) {
@@ -2515,6 +2699,13 @@ html, body {
         var to = page + d[0]; if (to < 0 || to >= R.length) return;
         G.ui.round({ id: 'pg' + d[0], x: d[1], y: 320, r: 46, color: C.sun, icon: function (cc, x, y) { cc.fillStyle = C.leafDeep; cc.beginPath(); cc.moveTo(x + d[0] * 20, y); cc.lineTo(x - d[0] * 13, y - 20); cc.lineTo(x - d[0] * 13, y + 20); cc.fill(); }, onTap: function () { page = to; G.sfx('whoosh'); } });
       });
+      var rescued = Object.keys(sv.rescues).length;
+      c.fillStyle = '#182e44'; G.roundRect(c, 307, 483, 666, 94, 26); c.fill();
+      G.officinaEgg(c, 367, 530, 29);
+      G.text('Squadra di soccorso', 417, 514, { size: 32, color: '#fff1bd', align: 'left' });
+      G.text(rescued === 2 ? 'Uovo in salvo da entrambe le vie!' : rescued ? 'Uovo in salvo! Prova l’altra via' : 'L’uovo sull’isolotto', 418, 547, { size: 23, color: '#d9effb', align: 'left' });
+      G.text('▶', 922, 531, { size: 30, color: '#fff1bd' });
+      G.ui.button({ id: 'rescue', ghost: true, x: 307, y: 483, w: 666, h: 94, r: 26, onTap: function () { G.go('officina', { mi: G.percorsi.RESCUE_ID }); } });
       G.ui.button({ id: 'profiles', x: 20, y: 600, w: 260, h: 100, color: C.water, label: 'Cambia dino', onTap: function () { G.accounts.logout(); G.go('accesso'); } });
       G.ui.button({ id: 'free', x: 300, y: 600, w: 300, h: 100, color: C.plum, label: 'Officina libera', fontSize: 30, onTap: function () { G.go('officina', { mi: -1 }); } });
       var next = Math.min(sv.open, all.length - 1);

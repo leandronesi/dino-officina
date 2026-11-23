@@ -1,9 +1,8 @@
-/* Real Chrome: screenshots of every world and real multi-touch on the pads.
-   node test/look.js  -> test/frames/*.png  (not published, see deploy.yml) */
+/* Real Chrome: game input and screenshots. Set DINO_TEST_FRAMES to override the output. */
 'use strict';
 const fs=require('fs'),path=require('path'),http=require('http'),os=require('os'),assert=require('assert');
 const {spawn}=require('child_process');
-const root=path.resolve(__dirname,'..'),out=path.join(__dirname,'frames');
+const root=path.resolve(__dirname,'..'),out=process.env.DINO_TEST_FRAMES || path.join(__dirname,'frames');
 const chrome=['C:/Program Files/Google/Chrome/Application/chrome.exe','C:/Program Files (x86)/Google/Chrome/Application/chrome.exe'].find(fs.existsSync);
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 let child,ws,server;
@@ -20,6 +19,7 @@ async function main(){
   ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.id){const p=pending.get(m.id);pending.delete(m.id);if(p)m.error?p.reject(m.error):p.resolve(m.result);}else if(m.method==='Runtime.exceptionThrown')errors.push(m.params.exceptionDetails);else if(m.method==='Runtime.consoleAPICalled'&&m.params.type==='error')errors.push(m.params.args.map(a=>a.value||a.description).join(' '));};
   const call=(method,params={})=>new Promise((resolve,reject)=>{const id=++seq;pending.set(id,{resolve,reject});ws.send(JSON.stringify({id,method,params}));});
   async function run(expression){const r=await call('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});assert(!r.exceptionDetails,JSON.stringify(r.exceptionDetails));return r.result.value;}
+  async function until(expression,label){for(let i=0;i<250;i++){if(await run(expression))return;await delay(80);}assert.fail(label);}
   async function shot(name){await delay(250);const s=await call('Page.captureScreenshot',{format:'png'});fs.writeFileSync(path.join(out,name+'.png'),Buffer.from(s.data,'base64'));}
   const touch=(type,pts)=>call('Input.dispatchTouchEvent',{type,touchPoints:pts});
   await call('Runtime.enable');await call('Page.enable');
@@ -53,8 +53,40 @@ async function main(){
   await call('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:1170,y:590,id:1}]});await delay(800);await call('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
   assert((await run('G.strada.state().x'))>x0+100,'holding the green pedal drives');console.log('touch: pedal drives');
   await run("G.strada.state().phase='win'");await delay(400);await shot('win');
+
+  await run("G.level=1;G.go('menu')");
+  await until("G.current==='menu'",'Rescue menu did not load');
+  await delay(300);await tapAt(620,530);
+  await until("G.current==='officina' && G.officinaShop.state().mi===G.percorsi.RESCUE_ID",'The rescue button did not open the workshop');
+  await delay(300);await shot('rescue-workshop');
+  await tapAt(1110,196);
+  for(const [x,y] of [[173,174],[275,324],[173,474],[275,624]])await tapAt(x,y);
+  await tapAt(950,660);
+  await until("G.current==='strada' && G.strada.state().track==='rampa'",'The rocket route did not open');
+  await delay(300);await tapAt(1150,136);
+  await until("G.strada.state().assist",'The first rocket cue did not appear');
+  await shot('rescue-launch');
+  await tapAt(306,612);
+  await until("G.strada.state().phase==='pickup'",'The egg was not reached by rocket');
+  await shot('rescue-pickup');
+  await until("G.strada.state().cargo && G.strada.state().assist",'The second launch was not reached with the egg');
+  await tapAt(306,612);await shot('rescue-egg-in-flight');
+  await until("G.strada.state().phase==='win' && G.officinaSave().rescues.rampa===1",'The rocket route did not save the egg');
+  await shot('rescue-win');
+  await tapAt(640,476);
+  await until("G.current==='officina' && G.officinaShop.state().track==='fiume'",'The other route did not open from the win screen');
+  await delay(300);
+  for(const [x,y] of [[275,174],[173,324],[377,474],[173,624]])await tapAt(x,y);
+  await tapAt(950,660);
+  await until("G.current==='strada' && G.strada.state().track==='fiume'",'The river route did not open');
+  await delay(300);await tapAt(1150,136);
+  await until("G.strada.state().cargo",'The egg was not reached by boat');
+  await shot('rescue-egg-on-boat');
+  await until("G.strada.state().phase==='win' && G.officinaSave().rescues.fiume===1",'The boat route did not save the egg');
+  console.log('PASS rescue: menu, both builds, rocket cue and two launches, pickup, loaded return and both completion badges');
+
   await call('Emulation.setDeviceMetricsOverride',{width:960,height:600,deviceScaleFactor:2,mobile:true});await run("G.go('officina',{mi:9})");await delay(600);await shot('tablet');
   assert.deepEqual(errors,[],'console errors: '+JSON.stringify(errors).slice(0,800));
-  console.log('PASS look: frames in test/frames');
+  console.log('PASS look: frames in ' + out);
 }
 main().catch(e=>{console.error(e);process.exitCode=1;}).finally(()=>{try{ws&&ws.close();}catch(e){}try{child&&child.kill();}catch(e){}try{server&&server.close();}catch(e){}});

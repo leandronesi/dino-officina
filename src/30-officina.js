@@ -23,14 +23,17 @@
 
   G.officinaSave = function () {
     var s = G.save.officina || (G.save.officina = {});
-    s.open = s.open || 0; s.stars = s.stars || {}; s.builds = s.builds || {};
+    s.open = s.open || 0; s.stars = s.stars || {}; s.builds = s.builds || {}; s.rescues = s.rescues || {};
     return s;
   };
-  function mission() { return S.mi >= 0 ? G.percorsi.MISSIONS[S.mi] : G.percorsi.freeTrack(S.track); }
+  function rescue() { return S.mi === G.percorsi.RESCUE_ID; }
+  function mission() { return G.percorsi.mission(S.mi, S.track); }
   // the project is a picture to copy, never a lock: any piece can go on, and the road decides
-  function matches(slot) { return S.mi >= 0 && G.level === 1 && S.v[slot] === mission().sol[slot]; }
+  function matches(slot) { var m = mission(); return G.level === 1 && !!m.sol && S.v[slot] === m.sol[slot]; }
   function complete() { return G.officina.SLOTS.every(function (s) { return !!S.v[s]; }); }
   var EMPTY = function () { return { telaio: null, ruote: null, motore: null, extra: null }; };
+  function buildKey() { return rescue() ? 'soccorso-' + S.track : S.mi; }
+  function restoreBuild(sv) { S.v = Object.assign(EMPTY(), sv.builds[buildKey()]); }
 
   function obstacleKinds(m) { var k = []; m.course.obst.forEach(function (o) { if (k.indexOf(o.k) < 0) k.push(o.k); }); return k; }
   function obstIcon(c, k, x, y, s) {
@@ -46,21 +49,25 @@
 
   function enter(o) {
     o = o || {};
-    var sv = G.officinaSave(), m;
+    var sv = G.officinaSave();
     S = { mi: o.mi === undefined ? -1 : o.mi, hint: o.hint || null, track: sv.track || 'colline', snap: {}, tip: '', preview: 0 };
-    m = mission();
-    var prev = sv.builds[S.mi];
-    S.v = prev ? Object.assign(EMPTY(), prev) : EMPTY();
+    if (rescue()) {
+      S.track = G.percorsi.mission(S.mi, o.track || sv.rescueRoute).id;
+      if (sv.rescueRoute !== S.track) { sv.rescueRoute = S.track; G.saveNow(); }
+    }
+    var m = mission();
+    restoreBuild(sv);
     var current = S;
     if (!G.mute) setTimeout(function () {
       if (G.current !== 'officina' || S !== current || S.tip) return;
-      if (S.mi < 0) G.say('Monta quello che vuoi, poi provalo!');
+      if (rescue()) G.say('Un uovo è rimasto sull’isolotto! Scegli la strada e monta il veicolo.');
+      else if (S.mi < 0) G.say('Monta quello che vuoi, poi provalo!');
       else if (G.level === 1) G.say('Guarda il progetto e monta i pezzi!');
       else G.say(m.name + '. Guarda cosa c\'è sulla strada e scegli i pezzi.');
     }, 300);
   }
   function saveBuild() {
-    G.officinaSave().builds[S.mi] = Object.assign({}, S.v);
+    G.officinaSave().builds[buildKey()] = Object.assign({}, S.v);
     G.saveNow();
   }
   function choose(slot, id) {
@@ -70,9 +77,16 @@
     G.say(S.tip + (!missing ? ' Puoi provare su strada.' : missing === 'extra' ? ' Scegli un extra, oppure Nessuno.' : ''));
   }
   function chooseTrack(key) {
+    if (S.track === key) return;
     S.track = key; S.hint = null; S.tip = '';
-    G.officinaSave().track = key; G.saveNow();
-    G.say(G.percorsi.freeTrack(key).tip);
+    var sv = G.officinaSave();
+    if (rescue()) {
+      sv.rescueRoute = key;
+      S.preview = 0; S.snap = {};
+      restoreBuild(sv);
+    } else sv.track = key;
+    G.saveNow();
+    G.say(mission().tip);
   }
   function prova() {
     if (!complete()) {
@@ -95,7 +109,8 @@
     // top bar
     c.fillStyle = '#122c3a'; c.fillRect(0, 0, W, 96);
     G.ui.button({ id: 'of-map', x: 16, y: 8, w: 200, h: 80, r: 24, color: C.water, label: 'Mappa', fontSize: 30, onTap: function () { G.go('menu'); } });
-    G.text(S.mi >= 0 ? (G.percorsi.RACCOLTE[m.r].name + ' · ' + m.name) : 'Officina libera', 640, 48, { size: 34, color: C.sun, maxWidth: 760 });
+    var title = rescue() ? 'L’uovo sull’isolotto' : S.mi >= 0 ? G.percorsi.RACCOLTE[m.r].name + ' · ' + m.name : 'Officina libera';
+    G.text(title, 640, 48, { size: 34, color: C.sun, maxWidth: 760 });
     if (OF.SLOTS.some(function (slot) { return !!S.v[slot]; })) {
       G.ui.button({ id: 'of-clear', x: 1072, y: 16, w: 188, h: 64, r: 20, color: '#39596b', label: 'Smonta tutto', fontSize: 23, onTap: function () {
         S.v = EMPTY(); S.preview = 0; S.hint = null; S.tip = 'Scegli i pezzi per il prossimo veicolo.'; saveBuild();
@@ -130,7 +145,20 @@
         onTap: function () { S.preview = 1.2; G.sfx(S.v.extra === 'razzo' ? 'whoosh' : 'pop'); } });
     }
     // Piccolo: the picture to copy. Grande: what waits on the road.
-    if (S.mi >= 0 && G.level === 1) {
+    if (rescue()) {
+      G.text(G.level === 1 ? 'Scegli il tuo progetto' : 'Scegli la strada', 970, 125, { size: 24, color: C.cream });
+      Object.keys(G.percorsi.RESCUE_ROUTES).forEach(function (key, i) {
+        var route = G.percorsi.RESCUE_ROUTES[key], x = 700 + i * 280;
+        c.fillStyle = route === m ? '#fff0ad' : '#e4edf1'; G.roundRect(c, x, 145, 260, 112, 18); c.fill();
+        if (route === m) { c.strokeStyle = '#f4b646'; c.lineWidth = 4; c.stroke(); }
+        G.text(route.name, x + 130, 165, { size: 22, color: C.ink });
+        if (G.level === 1) OF.drawVehicle(c, route.sol, x + 130, 248, { s: .46, t: G.t });
+        else if (key === 'rampa') { obstIcon(c, 'steep', x + 86, 217, .77); obstIcon(c, 'gap', x + 174, 217, .77); }
+        else obstIcon(c, route.icon, x + 130, 217, .83);
+        if (G.officinaSave().rescues[key]) A.star(c, x + 234, 174, 13, C.sun);
+        G.ui.button({ id: 'rescue-' + key, ghost: true, x: x, y: 145, w: 260, h: 112, r: 18, onTap: function () { chooseTrack(key); } });
+      });
+    } else if (S.mi >= 0 && G.level === 1) {
       c.fillStyle = '#fff6e0'; G.roundRect(c, 760, 112, 340, 150, 20); c.fill(); c.strokeStyle = '#8a5a32'; c.lineWidth = 8; c.stroke();
       G.text('Il progetto', 930, 140, { size: 22, color: C.leafDeep });
       OF.drawVehicle(c, m.sol, 930, 249, { s: .65, t: G.t });
@@ -156,7 +184,7 @@
     var ready = complete();
     var count = OF.SLOTS.filter(function (s) { return !!S.v[s]; }).length;
     G.text(count + ' di 4 pezzi montati', 950, 600, { size: 22, color: '#fff6e0', stroke: '#59402f', strokeWidth: 5 });
-    G.ui.button({ id: 'prova', x: 762, y: 617, w: 376, h: 90, r: 28, color: ready ? C.leaf : '#77695e', label: 'Prova su strada', fontSize: 34, onTap: prova });
+    G.ui.button({ id: 'prova', x: 762, y: 617, w: 376, h: 90, r: 28, color: ready ? C.leaf : '#77695e', label: rescue() ? 'Salva l’uovo!' : 'Prova su strada', fontSize: 34, onTap: prova });
   }
 
   G.scene('officina', {

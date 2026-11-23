@@ -47,6 +47,13 @@
         var to = page + d[0]; if (to < 0 || to >= R.length) return;
         G.ui.round({ id: 'pg' + d[0], x: d[1], y: 320, r: 46, color: C.sun, icon: function (cc, x, y) { cc.fillStyle = C.leafDeep; cc.beginPath(); cc.moveTo(x + d[0] * 20, y); cc.lineTo(x - d[0] * 13, y - 20); cc.lineTo(x - d[0] * 13, y + 20); cc.fill(); }, onTap: function () { page = to; G.sfx('whoosh'); } });
       });
+      var rescued = Object.keys(sv.rescues).length;
+      c.fillStyle = '#182e44'; G.roundRect(c, 307, 483, 666, 94, 26); c.fill();
+      G.officinaEgg(c, 367, 530, 29);
+      G.text('Squadra di soccorso', 417, 514, { size: 32, color: '#fff1bd', align: 'left' });
+      G.text(rescued === 2 ? 'Uovo in salvo da entrambe le vie!' : rescued ? 'Uovo in salvo! Prova l’altra via' : 'L’uovo sull’isolotto', 418, 547, { size: 23, color: '#d9effb', align: 'left' });
+      G.text('▶', 922, 531, { size: 30, color: '#fff1bd' });
+      G.ui.button({ id: 'rescue', ghost: true, x: 307, y: 483, w: 666, h: 94, r: 26, onTap: function () { G.go('officina', { mi: G.percorsi.RESCUE_ID }); } });
       G.ui.button({ id: 'profiles', x: 20, y: 600, w: 260, h: 100, color: C.water, label: 'Cambia dino', onTap: function () { G.accounts.logout(); G.go('accesso'); } });
       G.ui.button({ id: 'free', x: 300, y: 600, w: 300, h: 100, color: C.plum, label: 'Officina libera', fontSize: 30, onTap: function () { G.go('officina', { mi: -1 }); } });
       var next = Math.min(sv.open, all.length - 1);

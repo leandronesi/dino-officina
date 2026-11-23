@@ -111,7 +111,78 @@ delete G.save.officina;R.reset(0,P.MISSIONS[0].sol);for(let f=0;f<60*60&&R.state
 assert.equal(R.state().phase,'win');assert(G.save.officina.stars[0]>=1);assert.equal(G.save.officina.open,1);
 G.accounts.login('legacy');assert.equal(G.save.officina,undefined,'sibling save leaked');G.accounts.login('p-old');assert.equal(G.save.officina.open,1);
 
+// Rescue is offered from the normal menu and keeps each route and child separate.
+{
+  const buttons=new Map(), button=G.ui.button;
+  G.ui.button=o=>buttons.set(o.id,o);
+  try {
+    G.sceneOf('menu').draw(context);
+    assert(buttons.has('rescue'),'rescue is open from the main menu');
+    const go=G.go;
+    let opened;
+    G.go=(scene,args)=>{opened={scene,args};};
+    try { buttons.get('rescue').onTap(); } finally { G.go=go; }
+    assert.equal(opened.scene,'officina');
+    assert.equal(opened.args.mi,P.RESCUE_ID);
+    G.sceneOf('officina').enter(opened.args);
+    G.sceneOf('officina').draw(context);
+    assert(buttons.has('rescue-fiume') && buttons.has('rescue-rampa'));
+    shop.choose('telaio','barca');
+    buttons.get('rescue-rampa').onTap();
+    assert.equal(shop.state().track,'rampa');
+    assert.equal(shop.state().v.telaio,null);
+    buttons.get('rescue-fiume').onTap();
+    assert.equal(shop.state().v.telaio,'barca');
+    G.sceneOf('officina').enter({mi:P.RESCUE_ID,track:'rampa'});
+    G.sceneOf('officina').enter({mi:P.RESCUE_ID});
+    assert.equal(shop.state().track,'rampa','leaving the alternate route workshop returns to the same project');
+  } finally { G.ui.button=button; }
+}
+
+for(const level of [1,2]) for(const [track,m] of Object.entries(P.RESCUE_ROUTES)){
+  G.level=level;
+  R.reset(P.RESCUE_ID,m.sol,track);
+  let loaded=false, pickup=false, wobble=0, used=new Set();
+  for(let f=0;f<60*45&&R.state().phase!=='win';f++){
+    const s=R.state();
+    if(s.phase==='pickup'){
+      pickup=true;
+      if(level===1) assert(!G.officinaSave().rescues[track],'the egg is not yet at the nest');
+    }
+    loaded ||= s.cargo;
+    wobble=Math.max(wobble,Math.abs(s.wobble));
+    const gap=m.course.obst.find(o=>o.k==='gap'&&o.x0-s.x>=0&&(level===1?s.assist:o.x0-s.x<=85));
+    const fire=gap && !used.has(gap.x0);
+    if(fire)used.add(gap.x0);
+    R.step({gas:true,fire});
+  }
+  const s=R.state();
+  assert.equal(s.phase,'win',track+' at age '+level+' must reach the nest ('+JSON.stringify({x:s.x,cargo:s.cargo,fails:s.failAt})+')');
+  assert(pickup&&loaded,'both the pickup and loaded return must be played');
+  assert(wobble>.02,'the cargo responds to driving');
+  assert.equal(s.fails,0);
+  assert.equal(G.officinaSave().rescues[track],1);
+  assert.equal(G.officinaSave().open,1,'the rescue is independent of the original map');
+}
+{
+  const m=P.RESCUE_ROUTES.rampa;
+  const firstGap=m.course.obst.find(o=>o.k==='gap');
+  let fired=false;
+  R.reset(P.RESCUE_ID,m.sol,m.id);
+  for(let f=0;f<60*25&&R.state().phase!=='fail';f++){
+    const fire=!fired&&firstGap.x0-R.state().x<80;
+    fired ||= fire;
+    R.step({gas:true,fire});
+  }
+  assert.equal(R.state().phase,'fail','missing the second launch must be recoverable');
+  assert(R.state().cargo,'the egg was picked up before the missed jump');
+  for(let f=0;f<70;f++)R.step({});
+  assert(R.state().cargo&&R.state().x>=m.course.pickup,'retry keeps the egg and restarts on the return');
+  assert.equal(R.state().rcd,0,'retry recharges the rocket');
+}
+G.accounts.login('legacy');assert.equal(G.officinaSave().rescues.rampa,undefined,'the rescue belongs to the active child');G.accounts.login('p-old');
+
 // ---- scenes draw
 for(const [name,arg] of [['accesso'],['menu'],['officina',{mi:0}],['officina',{mi:-1}],['strada',{mi:4,v:P.MISSIONS[4].sol}]]){const sc=G.sceneOf(name);if(sc.enter)sc.enter(arg||{});sc.draw(context);}
 R.state().phase='win';G.sceneOf('strada').draw(context);
-console.log('PASS Dino Officina: every project reaches the finish, every piece matters, hints, passive child, Piccolo puzzle, migration, saves');
+console.log('PASS Dino Officina: 20 original missions, three practice tracks, both rescue routes at both ages, cargo retry, separate saves');

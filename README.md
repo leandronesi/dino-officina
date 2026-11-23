@@ -3,6 +3,18 @@
 Monta il tuo veicolo e guidalo. Gioco canvas per tablet, offline, senza
 librerie né risorse esterne.
 
+## Squadra di soccorso
+
+Dal menu scegli **L’uovo sull’isolotto**. La via del fiume si attraversa
+con barca ed elica, la via delle rampe con ruote grandi e razzo. All’isolotto
+l’uovo sale da solo sul veicolo. Al ritorno il carico oscilla e rende la guida
+più lenta. Se cadi dopo averlo raccolto, riparti con l’uovo già a bordo.
+
+Piccolo vede entrambi i progetti e si ferma sulla rampa finché tocca il
+razzo. Grande vede il terreno e sceglie quando partire. La mappa ricorda
+quali vie ha completato ciascun bambino. I due montaggi restano salvati
+separatamente.
+
 ## Come si gioca
 
 **In officina** si sceglie un pezzo per ciascuno dei quattro attacchi, e ogni
